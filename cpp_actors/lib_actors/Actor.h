@@ -28,7 +28,6 @@
 #include <rxcpp/rx.hpp>
 #include <utility>
 #include "Logger.h"
-#include "Executor.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
@@ -75,7 +74,7 @@ namespace Actors
             });
         }
 
-        void publish(Messages::Message* msg) {
+        static void publish(Messages::Message* msg) {
             auto msg_ptr = Message_ptr(msg);
             Dispatchers::Dispatcher::getInstance().publish(msg_ptr);
             StateMachines::SMDispatcher::getInstance().publish(msg_ptr);

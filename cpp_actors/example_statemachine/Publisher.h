@@ -32,7 +32,7 @@ namespace Actors
     {
     public:
         Publisher(): Actor("PUBLISHER") {
-            Scheduler::repeat(1000, [this]() {
+            Scheduler::repeat(1000, []() {
                 if (rand() > RAND_MAX/2 )
                     Message::publish(new OpenDoorMsg());
                 else
