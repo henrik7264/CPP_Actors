@@ -22,7 +22,8 @@
 #include "Messages.h"
 #include "Actor.h"
 
-#define PUBLISHER std::shared_ptr<Actors::Actor>(new Actors::Publisher()) // Only defined to simplify initialization of actors - see main.cpp
+// Only defined to simplify initialization of actors - see main.cpp
+#define PUBLISHER std::shared_ptr<Actors::Actor>(new Actors::Publisher())
 
 
 namespace Actors
@@ -33,9 +34,9 @@ namespace Actors
         Publisher(): Actor("PUBLISHER") {
             Scheduler::repeat(1000, [this]() {
                 if (rand() > RAND_MAX/2 )
-                    Message::publish(new OpenDoor());
+                    Message::publish(new OpenDoorMsg());
                 else
-                    Message::publish(new CloseDoor());
+                    Message::publish(new CloseDoorMsg());
             });
         }
         ~Publisher() override = default;

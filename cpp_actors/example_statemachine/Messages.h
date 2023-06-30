@@ -24,18 +24,18 @@
 
 namespace Messages
 {
-    struct OpenDoor: public Message
+    struct OpenDoorMsg: public Message
     {
-        OpenDoor(): Message(MessageType::OPENDOOR) {}
-        ~OpenDoor() override = default;
-    }; // OpenDoor
+        OpenDoorMsg(): Message(MessageType::OPEN_DOOR) {}
+        ~OpenDoorMsg() override = default;
+    }; // OpenDoorMsg
 
 
-    struct CloseDoor: public Message
+    struct CloseDoorMsg: public Message
     {
-        CloseDoor(): Message(MessageType::CLOSEDOOR) {}
-        ~CloseDoor() override = default;
-    }; // CloseDoor
+        CloseDoorMsg(): Message(MessageType::CLOSE_DOOR) {}
+        ~CloseDoorMsg() override = default;
+    }; // CloseDoorMsg
 } // Messages
 
 #endif //CPP_ACTORS_MESSAGES_H

@@ -39,7 +39,11 @@ namespace Dispatchers
         std::list<std::function<void(Message_ptr)>> funcLists[MessageType::NO_OF_MSG_TYPES];
 
         Dispatcher() = default;
-        virtual ~Dispatcher() = default;
+        virtual ~Dispatcher() {
+            std::unique_lock<std::mutex> lock(mutex);
+            for (auto & funcList : funcLists)
+                funcList.clear();
+        };
 
     public:
         static Dispatcher& getInstance() {

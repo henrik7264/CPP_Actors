@@ -26,18 +26,18 @@
 
 namespace Messages
 {
-    class PubSub: public Message
+    class PubSubMsg: public Message
     {
     private:
         std::string data;
 
     public:
-        explicit PubSub(std::string  data): Message(MessageType::PUBSUB), data(std::move(data)) {}
-        ~PubSub() override = default;
+        explicit PubSubMsg(std::string  data): Message(MessageType::PUB_SUB), data(std::move(data)) {}
+        ~PubSubMsg() override = default;
 
         const std::string& getData() const {return data;}
-        friend std::ostream& operator<< (std::ostream& out, const PubSub* msg)  {return out << msg->getData();}
-    }; // PubSub
+        friend std::ostream& operator<< (std::ostream& out, const PubSubMsg* msg)  {return out << msg->getData();}
+    }; // PubSubMsg
 } // Messages
 
 #endif //CPP_ACTORS_MESSAGES_H

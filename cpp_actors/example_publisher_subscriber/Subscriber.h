@@ -20,22 +20,19 @@
 #include "Messages.h"
 #include "Actor.h"
 
-#define SUBSCRIBER std::shared_ptr<Actors::Actor>(new Actors::Subscriber()) // Only defined to simplify initialization of actors - see main.cpp
+// Only defined to simplify initialization of actors - see main.cpp
+#define SUBSCRIBER std::shared_ptr<Actors::Actor>(new Actors::Subscriber())
 
 
 namespace Actors
 {
     class Subscriber: public Actor
     {
-    private:
-        int i = 0;
-
     public:
         Subscriber(): Actor("SUBSCRIBER") {
-            Message::subscribe(MessageType::PUBSUB, [this](const Message_ptr& msg){
-                auto pubsub = dynamic_cast<PubSub*>(msg.get());
-                Logger::debug() << pubsub;
-                i++;
+            Message::subscribe(MessageType::PUB_SUB, [this](const Message_ptr& msg){
+                auto* pubSubMsg = dynamic_cast<PubSubMsg*>(msg.get());
+                Logger::debug() << pubSubMsg;
             });
         }
         ~Subscriber() override = default;

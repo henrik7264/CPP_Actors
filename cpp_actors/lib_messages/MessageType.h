@@ -25,9 +25,9 @@ namespace Messages
     enum MessageType
     {
         NONE, // Don't remove or rename.
-        PUBSUB, // Used in example publish subscriber.
-        OPENDOOR, // Used in example statemachine.
-        CLOSEDOOR, // Used in example statemachine.
+        PUB_SUB, // Used in example publish subscriber.
+        OPEN_DOOR, // Used in example statemachine.
+        CLOSE_DOOR, // Used in example statemachine.
         NO_OF_MSG_TYPES // Don't remove or rename.
     };
 } // Messages

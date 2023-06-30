@@ -20,7 +20,8 @@
 #include "Messages.h"
 #include "Actor.h"
 
-#define SMACHINE std::shared_ptr<Actors::Actor>(new Actors::SMachine()) // Only defined to simplify initialization of actors - see main.cpp
+// Only defined to simplify initialization of actors - see main.cpp
+#define SMACHINE std::shared_ptr<Actors::Actor>(new Actors::SMachine())
 
 namespace Actors
 {
@@ -30,13 +31,14 @@ namespace Actors
         enum States {DOOR_OPENED, DOOR_CLOSED};
         StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
                                  STATE(DOOR_CLOSED,
-                                       MESSAGE(OPENDOOR, NEXTSTATE(DOOR_OPENED), [this](const Message_ptr& msg){
+                                       MESSAGE(MessageType::OPEN_DOOR, NEXT_STATE(DOOR_OPENED), [this](const Message_ptr& msg){
                                            Logger::debug() << "Opening door ...";})),
                                  STATE(DOOR_OPENED,
-                                       MESSAGE(CLOSEDOOR, NEXTSTATE(DOOR_CLOSED), [this](const Message_ptr& msg){
+                                       MESSAGE(MessageType::CLOSE_DOOR, NEXT_STATE(DOOR_CLOSED), [this](const Message_ptr& msg){
                                            Logger::debug() << "Closing door ...";}),
-                                       TIMER(1000, NEXTSTATE(DOOR_CLOSED), [this](){
+                                       TIMER(1000, NEXT_STATE(DOOR_CLOSED), [this](){
                                            Logger::debug() << "Auto closing door ...";})));
+
     public:
         SMachine(): Actor("SMACHINE") {}
         ~SMachine() override = default;

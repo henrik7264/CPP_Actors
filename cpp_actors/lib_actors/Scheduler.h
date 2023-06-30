@@ -85,7 +85,8 @@ namespace Schedulers
         void stop() {
             doLoop = false;
             condVar.notify_one();
-            trd.join();
+            if (trd.joinable())
+                trd.join();
         }
 
     public:

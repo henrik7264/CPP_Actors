@@ -28,11 +28,19 @@
 #include <rxcpp/rx.hpp>
 #include <utility>
 #include "Logger.h"
+#include "Executor.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
 #include "Timer.h"
 #include "StateMachine.h"
+
+#define STATEMACHINE(...)  std::shared_ptr<StateMachines::StateMachine>(new StateMachines::StateMachine(mutex, __VA_ARGS__))
+#define STATE(...) new StateMachines::State(__VA_ARGS__)
+#define TIMER(...) new StateMachines::TimerTrans(__VA_ARGS__)
+#define MESSAGE(...) new StateMachines::MessageTrans(__VA_ARGS__)
+#define NEXT_STATE(nextState) StateMachines::NextState(nextState)
+
 
 using namespace Messages;
 
@@ -51,11 +59,13 @@ namespace Actors
     public:
         explicit Message(std::mutex& mutex): mutex(mutex) {}
         virtual ~Message() {
+            std::unique_lock<std::mutex> lock(mutex);
             for (const auto& subscription: subscriptions)
                 Dispatchers::Dispatcher::getInstance().unsubscribe(subscription.first, subscription.second);
         }
 
         void subscribe(MessageType type, const std::function<void(Message_ptr)>& func) {
+            std::unique_lock<std::mutex> lock(mutex);
             for (const auto& subscription: subscriptions)
                 assert(subscription.first != type);
             subscriptions.emplace_back(type, func);
@@ -65,7 +75,7 @@ namespace Actors
             });
         }
 
-        static void publish(Messages::Message* msg) {
+        void publish(Messages::Message* msg) {
             auto msg_ptr = Message_ptr(msg);
             Dispatchers::Dispatcher::getInstance().publish(msg_ptr);
             StateMachines::SMDispatcher::getInstance().publish(msg_ptr);
@@ -90,11 +100,13 @@ namespace Actors
     public:
         explicit Scheduler(std::mutex& mutex): mutex(mutex) {};
         virtual ~Scheduler() {
+            std::unique_lock<std::mutex> lock(mutex);
             for (auto jobId : scheduledJobs)
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
         };
 
         Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
+            std::unique_lock<std::mutex> lock(mutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(mutex);
                 func();
@@ -104,6 +116,7 @@ namespace Actors
         }
 
         Schedulers::JobId once(long msec, const std::function<void()>& func) {
+            std::unique_lock<std::mutex> lock(mutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(mutex);
                 func();
@@ -113,6 +126,7 @@ namespace Actors
         }
 
         Schedulers::JobId repeat(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
+            std::unique_lock<std::mutex> lock(mutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(mutex);
                 func();
@@ -122,6 +136,7 @@ namespace Actors
         }
 
         Schedulers::JobId repeat(long msec, const std::function<void()>& func) {
+            std::unique_lock<std::mutex> lock(mutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(mutex);
                 func();
@@ -131,6 +146,7 @@ namespace Actors
         }
 
         void remove(Schedulers::JobId id) {
+            std::unique_lock<std::mutex> lock(mutex);
             Schedulers::Scheduler::getInstance().removeJob(id);
             scheduledJobs.remove(id); // Used by destructor to remove jobs
         }
@@ -153,6 +169,7 @@ namespace Actors
             });
         }
     }; // Timer
+
 
     class Logger
     {

@@ -40,8 +40,9 @@ namespace Queues
 
         T get() {
             std::unique_lock<std::mutex> lock(mutex);
-            while (queue.empty())
+            while (queue.empty()) {
                 condVar.wait(lock);
+            }
             auto item = queue.front();
             queue.pop();
             return item;
@@ -56,6 +57,11 @@ namespace Queues
          size_t size() {
             std::unique_lock<std::mutex> lock(mutex);
             return queue.size();
+        }
+
+        bool empty() {
+            std::unique_lock<std::mutex> lock(mutex);
+            return queue.empty();
         }
     }; // Queue
 } // Queues

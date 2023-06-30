@@ -20,19 +20,12 @@
 #include <cassert>
 #include <memory>
 #include <functional>
-#include <thread>
 #include <mutex>
 #include <list>
 #include <map>
 #include "Message.h"
 #include "Executor.h"
 #include "Scheduler.h"
-
-#define STATEMACHINE(...)  std::shared_ptr<StateMachines::StateMachine>(new StateMachines::StateMachine(__VA_ARGS__))
-#define STATE(...) new StateMachines::State(__VA_ARGS__)
-#define TIMER(...) new StateMachines::TimerTrans(__VA_ARGS__)
-#define MESSAGE(...) new StateMachines::MessageTrans(__VA_ARGS__)
-#define NEXTSTATE(nextState) StateMachines::NextState(nextState)
 
 using namespace Messages;
 
@@ -56,7 +49,7 @@ namespace StateMachines
     class SMDispatcher
     {
     private:
-        std::mutex mutex;
+        std::mutex smdMutex;
         std::map<MessageType, std::list<StateMachine*>> stateMachinesMap;
 
         SMDispatcher() = default;
@@ -68,8 +61,9 @@ namespace StateMachines
             return MySMDispatcher;
         }
 
-        void record(StateMachine* stateMachine);
-        void publish(const Message_ptr& msg);
+        void unregisterSM(StateMachine* stateMachine);
+        void registerSM(StateMachine* stateMachine);
+        void publish(const Message_ptr& message);
     }; // SMDispatcher
 
 
@@ -146,13 +140,13 @@ namespace StateMachines
 
     public:
         template<typename ... Transitions>
-        explicit State(const StateId& stateId, Transitions... events) : VarArg(VarArgType::STATE_VA), stateId(stateId), args({events...}) {
+        explicit State(const StateId& stateId, Transitions... transitions) : VarArg(VarArgType::STATE_VA), stateId(stateId), args({transitions...}) {
             for(auto arg: args)
                 assert(arg->getVarArcType() == VarArgType::TIMER_VA || arg->getVarArcType() == VarArgType::MESSAGE_VA);
         }
 
         template<typename ... Transitions>
-        explicit State(long stateId, Transitions... events): State(StateId(stateId), events...) {}
+        explicit State(long stateId, Transitions... transitions): State(StateId(stateId), transitions...) {}
 
         ~State() override {
             for (auto arg: args)
@@ -185,14 +179,15 @@ namespace StateMachines
     class StateMachine
     {
     private:
-        std::mutex mutex;
+        std::mutex smMutex;
+        std::mutex& actorMutex;
         StateId currState;
         std::list<VarArg*> args;
         std::list<Schedulers::JobId> jobIds;
 
     public:
         template<typename ... States>
-        explicit StateMachine(const Initial_State& initialState, States... states) : currState(initialState), args({states...}) {
+        explicit StateMachine(std::mutex& mutex, const Initial_State& initialState, States... states) : actorMutex(mutex), currState(initialState), args({states...}) {
             jobIds.clear();
             for (auto arg: args) {
                 assert(arg->getVarArcType() == VarArgType::STATE_VA);
@@ -200,23 +195,30 @@ namespace StateMachines
                 state->setStateMachine(this);
             }
             setCurrState(initialState);
-            SMDispatcher::getInstance().record(this);
+            SMDispatcher::getInstance().registerSM(this);
         }
 
         template<typename ... States>
-        explicit StateMachine(long initialState, States... states): StateMachine(Initial_State(initialState), states...) {}
+        explicit StateMachine(std::mutex& mutex, long initialState, States... states): StateMachine(mutex, Initial_State(initialState), states...) {}
+
         virtual ~StateMachine() {
+            std::unique_lock<std::mutex> lock(smMutex);
+            SMDispatcher::getInstance().unregisterSM(this);
+            for (auto jobId: jobIds)
+                Schedulers::Scheduler::getInstance().removeJob(jobId);
             for (auto arg: args)
                 delete arg;
         }
 
-        std::mutex& getMutex() {return mutex;}
+        std::mutex& getSMMutex() {return smMutex;}
+        std::mutex& getActorMutex() {return actorMutex;}
 
         const std::list<VarArg*>& getArgs() const {return args;}
 
         StateId getCurrState() const {return currState;}
 
         void setCurrState(const StateId& currentState) {
+            //std::unique_lock<std::mutex> lock(smMutex); // not needed is indirectly locked by the update.
             for (auto jobId: jobIds)
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
             jobIds.clear();
@@ -235,24 +237,34 @@ namespace StateMachines
         }
 
         void update(const Message_ptr& msg) {
-            std::unique_lock<std::mutex> lock(mutex);
-            for (auto arg: args) {
-                auto state = dynamic_cast<State*>(arg);
-                if (currState == state->getStateId())
-                    state->update(msg);
+            if (smMutex.try_lock()) {
+                for (auto arg: args) {
+                    auto state = dynamic_cast<State *>(arg);
+                    if (currState == state->getStateId())
+                        state->update(msg);
+                }
+                smMutex.unlock();
             }
         }
     }; // StateMachine
 
 
-    void SMDispatcher::record(StateMachine* stateMachine) {
-        std::unique_lock<std::mutex> lock(mutex);
+    void SMDispatcher::unregisterSM(StateMachine* stateMachine) {
+        std::unique_lock<std::mutex> lock(smdMutex);
+        for (auto& elem : stateMachinesMap) {
+            elem.second.remove_if([stateMachine](StateMachine* sm){ return sm == stateMachine;});
+            stateMachinesMap[elem.first] = elem.second;
+        }
+    }
+
+    void SMDispatcher::registerSM(StateMachine* stateMachine) {
+        std::unique_lock<std::mutex> lock(smdMutex);
         if (stateMachine != nullptr) {
             for (auto state_arg: stateMachine->getArgs()) {
                 auto state = dynamic_cast<State*>(state_arg);
-                for (auto trans_arg: state->getArgs()) {
-                    if (trans_arg->getVarArcType() == VarArgType::MESSAGE_VA) {
-                        auto message = dynamic_cast<MessageTrans*>(trans_arg);
+                for (auto trans: state->getArgs()) {
+                    if (trans->getVarArcType() == VarArgType::MESSAGE_VA) {
+                        auto message = dynamic_cast<MessageTrans*>(trans);
                         std::list<StateMachine*> stateMachineList;
                         if (stateMachinesMap.find(message->getMsgType()) != stateMachinesMap.end())
                             stateMachineList = stateMachinesMap[message->getMsgType()];
@@ -264,27 +276,27 @@ namespace StateMachines
         }
     }
 
-
-    void SMDispatcher::publish(const Message_ptr& msg) {
-        std::unique_lock<std::mutex> lock(mutex);
-        if (stateMachinesMap.find(msg->getMsgType()) != stateMachinesMap.end())
-            for (auto stateMachine: stateMachinesMap[msg->getMsgType()])
-                Executors::Executor::getInstance().exec([stateMachine](const Message_ptr m){stateMachine->update(m);}, msg);
+    void SMDispatcher::publish(const Message_ptr& message) {
+        std::unique_lock<std::mutex> lock(smdMutex);
+        if (stateMachinesMap.find(message->getMsgType()) != stateMachinesMap.end())
+            for (auto stateMachine: stateMachinesMap[message->getMsgType()])
+                Executors::Executor::getInstance().exec([stateMachine](const Message_ptr msg){stateMachine->update(msg);}, message);
     }
 
-
     void MessageTrans::update(const Message_ptr& msg) {
+        std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
         action(msg);
         if (nextState != UNDEFINED_STATE)
             stateMachine->setCurrState(nextState);
     }
 
     void TimerTrans::update() {
-        if (stateMachine->getMutex().try_lock()) {
+        if (stateMachine->getSMMutex().try_lock()) {
+            std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
             action();
             if (nextState != UNDEFINED_STATE)
                 stateMachine->setCurrState(nextState);
-            stateMachine->getMutex().unlock();
+            stateMachine->getSMMutex().unlock();
         }
     }
 } // StateMachines

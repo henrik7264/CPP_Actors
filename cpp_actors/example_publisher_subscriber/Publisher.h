@@ -21,7 +21,8 @@
 #include "Messages.h"
 #include "Actor.h"
 
-#define PUBLISHER std::shared_ptr<Actors::Actor>(new Actors::Publisher()) // Only defined to simplify initialization of actors - see main.cpp
+// Only defined to simplify initialization of actors - see main.cpp
+#define PUBLISHER std::shared_ptr<Actors::Actor>(new Actors::Publisher())
 
 
 namespace Actors
@@ -34,7 +35,7 @@ namespace Actors
     public:
         Publisher(): Actor("PUBLISHER") {
             Scheduler::repeat(1000, [this]() {
-                Message::publish(new PubSub("Hello no. " + std::to_string(i)));
+                Message::publish(new PubSubMsg("Hello no. " + std::to_string(i)));
                 i++;
             });
         }

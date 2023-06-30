@@ -34,9 +34,9 @@ namespace Timers
         std::function<void()> func;
 
     public:
-        Timer(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func): jobId(0), msec(msec), func(func) {};
-        Timer(long msec, const std::function<void()>& func): Timer(std::chrono::duration<long, std::milli>(msec), func) {};
-        virtual ~Timer() = default;
+        Timer(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func): jobId(0), msec(msec), func(func) {}
+        Timer(long msec, const std::function<void()>& func): Timer(std::chrono::duration<long, std::milli>(msec), func) {}
+        virtual ~Timer() {stop();}
 
         void stop() {
             if (jobId != 0) {
