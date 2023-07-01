@@ -19,7 +19,6 @@
 #define CPP_ACTORS_MESSAGES_H
 
 #include "Message.h"
-#include "Message.h"
 
 
 namespace Messages
