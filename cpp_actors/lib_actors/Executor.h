@@ -53,8 +53,7 @@ namespace Executors
             doLoop = false;
             while (!done) {
                 jobQueue.push(std::make_pair([](const Message_ptr &) {}, noneMsg));
-                if (!done)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             if (trd.joinable())
                 trd.join();
@@ -63,6 +62,8 @@ namespace Executors
     public:
         Worker() : trd(std::thread([this]() { run(); })) {}
         virtual ~Worker() {stop();}
+
+        void stopWorker() {doLoop = false;}
     }; // Worker
 
     class Executor
@@ -71,14 +72,16 @@ namespace Executors
         std:: mutex mutex;
         std::list<Worker*> workers = {new Worker()};
         int maxQueueSize = 2;
-        bool isRunning = true;
+        bool doExec = true;
 
         Executor() = default;
         virtual ~Executor() {
             std::unique_lock<std::mutex> lock(mutex);
-            isRunning = false;
+            printf("Executor::~Executor: workers: %zu, qsize: %zu\n", workers.size(), jobQueue.size());
+            doExec = false;
             for (auto worker: workers)
                 delete (worker);
+            workers.clear();
         };
 
     public:
@@ -89,7 +92,7 @@ namespace Executors
 
         void exec(const std::function<void(Message_ptr)>& func, const Message_ptr& arg) {
             std::unique_lock<std::mutex> lock(mutex);
-            if (isRunning) {
+            if (doExec) {
                 jobQueue.push(std::make_pair(func, arg));
                 if (jobQueue.size() > maxQueueSize) {
                     workers.push_back(new Worker());
@@ -100,13 +103,20 @@ namespace Executors
 
         void exec(const std::function<void()>& func) {
             std::unique_lock<std::mutex> lock(mutex);
-            if (isRunning) {
+            if (doExec) {
                 jobQueue.push(std::make_pair([func](const Message_ptr &) { func(); }, noneMsg));
                 if (jobQueue.size() > maxQueueSize) {
                     workers.push_back(new Worker());
                     maxQueueSize *= 2;
                 }
             }
+        }
+
+        void stopExecutor() {
+            std::unique_lock<std::mutex> lock(mutex);
+            doExec = false;
+            for (auto worker: workers)
+                worker->stopWorker();
         }
     }; // Executor
 } // Executors

@@ -23,6 +23,8 @@ int main()
 {
     // initialise all Actors
     auto actors = {PUBLISHER, SMACHINE};
+
     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+    Executors::Executor::getInstance().stopExecutor();
     return 0;
 }

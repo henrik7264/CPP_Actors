@@ -218,7 +218,7 @@ namespace StateMachines
         StateId getCurrState() const {return currState;}
 
         void setCurrState(const StateId& currentState) {
-            //std::unique_lock<std::mutex> lock(smMutex); // not needed is indirectly locked by the update.
+            //std::unique_lock<std::actorMutex> lock(smMutex); // not needed is indirectly locked by the update.
             for (auto jobId: jobIds)
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
             jobIds.clear();

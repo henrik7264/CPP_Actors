@@ -28,18 +28,18 @@
 #include <rxcpp/rx.hpp>
 #include <utility>
 #include "Logger.h"
+#include "Executor.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
 #include "Timer.h"
 #include "StateMachine.h"
 
-#define STATEMACHINE(...)  std::shared_ptr<StateMachines::StateMachine>(new StateMachines::StateMachine(mutex, __VA_ARGS__))
+#define STATEMACHINE(...)  std::shared_ptr<StateMachines::StateMachine>(new StateMachines::StateMachine(actorMutex, __VA_ARGS__))
 #define STATE(...) new StateMachines::State(__VA_ARGS__)
 #define TIMER(...) new StateMachines::TimerTrans(__VA_ARGS__)
 #define MESSAGE(...) new StateMachines::MessageTrans(__VA_ARGS__)
 #define NEXT_STATE(nextState) StateMachines::NextState(nextState)
-
 
 using namespace Messages;
 
@@ -53,23 +53,23 @@ namespace Actors
     {
     private:
         std::list<std::pair<MessageType, std::function<void(Message_ptr)>>> subscriptions;
-        std::mutex& mutex;
+        std::mutex& actorMutex;
 
     public:
-        explicit Message(std::mutex& mutex): mutex(mutex) {}
+        explicit Message(std::mutex& mutex): actorMutex(mutex) {}
         virtual ~Message() {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             for (const auto& subscription: subscriptions)
                 Dispatchers::Dispatcher::getInstance().unsubscribe(subscription.first, subscription.second);
         }
 
         void subscribe(MessageType type, const std::function<void(Message_ptr)>& func) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             for (const auto& subscription: subscriptions)
                 assert(subscription.first != type);
             subscriptions.emplace_back(type, func);
             Dispatchers::Dispatcher::getInstance().subscribe(type, [=](const Message_ptr& msg){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func(msg);
             });
         }
@@ -94,20 +94,20 @@ namespace Actors
     {
     private:
         std::list<Schedulers::JobId> scheduledJobs;
-        std::mutex& mutex;
+        std::mutex& actorMutex;
 
     public:
-        explicit Scheduler(std::mutex& mutex): mutex(mutex) {};
+        explicit Scheduler(std::mutex& mutex): actorMutex(mutex) {};
         virtual ~Scheduler() {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             for (auto jobId : scheduledJobs)
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
         };
 
         Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func();
             });
             scheduledJobs.push_back(id); // Used by destructor to remove jobs
@@ -115,9 +115,9 @@ namespace Actors
         }
 
         Schedulers::JobId once(long msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func();
             });
             scheduledJobs.push_back(id); // Used by destructor to remove jobs
@@ -125,9 +125,9 @@ namespace Actors
         }
 
         Schedulers::JobId repeat(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func();
             });
             scheduledJobs.push_back(id); // Used by destructor to remove jobs
@@ -135,9 +135,9 @@ namespace Actors
         }
 
         Schedulers::JobId repeat(long msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func();
             });
             scheduledJobs.push_back(id); // Used by destructor to remove jobs
@@ -145,7 +145,7 @@ namespace Actors
         }
 
         void remove(Schedulers::JobId id) {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(actorMutex);
             Schedulers::Scheduler::getInstance().removeJob(id);
             scheduledJobs.remove(id); // Used by destructor to remove jobs
         }
@@ -155,15 +155,15 @@ namespace Actors
     class Timer
     {
     private:
-        std::mutex& mutex;
+        std::mutex& actorMutex;
 
     public:
-        explicit Timer(std::mutex& mutex): mutex(mutex) {};
+        explicit Timer(std::mutex& mutex): actorMutex(mutex) {};
         virtual ~Timer() = default;
 
         Timer_t getInstance(long msec, const std::function<void()>& func) {
             return std::make_shared<Timers::Timer>(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(mutex);
+                std::unique_lock<std::mutex> lock(actorMutex);
                 func();
             });
         }
@@ -190,10 +190,10 @@ namespace Actors
     class Actor: public Message, public Scheduler, public Timer, public Logger
     {
     protected:
-        std::mutex mutex;
+        std::mutex actorMutex;
 
     public:
-        explicit Actor(const std::string& name): Message(mutex), Scheduler(mutex), Timer(mutex), Logger(name) {}
+        explicit Actor(const std::string& name): Message(actorMutex), Scheduler(actorMutex), Timer(actorMutex), Logger(name) {}
         ~Actor() override = default;
     }; // Actor
 } // Actors

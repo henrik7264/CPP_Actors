@@ -30,7 +30,7 @@ namespace Queues
     private:
         std::queue<T> queue;
         std::mutex mutex;
-        std::condition_variable condVar;
+        std::condition_variable itemAvailable;
 
     public:
         Queue() = default;
@@ -40,9 +40,8 @@ namespace Queues
 
         T get() {
             std::unique_lock<std::mutex> lock(mutex);
-            while (queue.empty()) {
-                condVar.wait(lock);
-            }
+            while (queue.empty())
+                itemAvailable.wait(lock);
             auto item = queue.front();
             queue.pop();
             return item;
@@ -51,7 +50,7 @@ namespace Queues
         void push(const T& item) {
             std::unique_lock<std::mutex> lock(mutex);
             queue.push(item);
-            condVar.notify_all();
+            itemAvailable.notify_all();
         }
 
          size_t size() {

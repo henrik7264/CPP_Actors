@@ -18,7 +18,6 @@
 
 #ifndef CPP_ACTORS_SCHEDULER_H
 #define CPP_ACTORS_SCHEDULER_H
-#include <cassert>
 #include <climits>
 #include <functional>
 #include <tuple>
