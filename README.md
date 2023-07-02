@@ -225,8 +225,6 @@ namespace Messages
 } // Messages
 ```
 
-------------------------------------------------------------------
-
 #### Operations on messages
 There are two operations which can be applied on messages: This is to subscribe to a message and to publish a message.
 
@@ -235,34 +233,46 @@ An Actor subscribes to a specific message type by providing a callback function
 that is executed each time a message of that type is published.
 
 ##### The 'subscribe' function
-```python
-def subscribe(self, msg_type, func) -> None
+```cpp
+void subscribe(MessageType type, const std::function<void(Message_ptr)>& func)
 
-# msg_type: A reference to a class/message.
-# func: A lambda or callback function. The function must take a message argument of the specified type.
+# type: A specified message type. The available messages types are defined in MessageType.h
+# func: A lambda or callback function. The function must take Message_ptr as argument.
 ```
 
 ##### Example
-```python
-self.message.subscribe(MyMessage, self.func)
+```cpp
+Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg){
+    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+    Logger::debug() << dataMsg;
+});
+```
 
-def func(self, msg: MyMessage):
-  self.logger.debug("Received a MyMessage: " + msg.name + ", " + str(msg.count))
+or 
+
+```cpp
+Message::subscribe(MessageType::PUB_SUB, std::bind(&Subscriber::cbFunc, this, std::placeholders::_1));
+
+void cbFunc(const Message_ptr& msg) {
+    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+    Logger::debug() << dataMsg;
+}
+});
 ```
 
 #### Publish a Message
 An Actor publishes messages by means of the publish function.
 
 ##### The 'publish' function
-```python
-def publish(self, msg) -> None
+```cpp
+void publish(Messages::Message* msg)
 
 # msg: The message (instance of a class) to be published.
 ```
 
 ##### Example
-```python
-self.message.publish(MyMessage("Hello world", 1234))
+```cpp
+Message::publish(new DataMsg("Hello wold."));
 ```
 
 The sequence diagram below shows how the subscription and publishing of messages work.
@@ -270,6 +280,8 @@ The Actor starts by subscribing to a number of messages (message types).
 A callback function is associated to each subscription.
 Each time a message is published the set of callback functions that have subscribed to the message will be executed.
 This takes place in the Dispatcher where a number of Worker threads will take care of the execution.
+It is actually the Executor class that takes care of the execution of the function.
+It is a helper class/function to the Dispatcher.
 
 <p align="center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Publish_Subscribe.png"><br>
@@ -287,352 +299,94 @@ There are some problems related to this execution model/architecture:
 
 The problems described above are common for this kind of architecture.
 There is no real solution to the problem except that the architect and programmer must ensure
-that the hardware platform is dimensioned to the message load of the system and that the callback functions are fast and responsive.
+that the hardware platform is dimensioned to the message load of the system 
+and that the callback functions are fast and responsive. 
 Avoid sleep, wait and I/O operations in callback functions that are called often.
 
 ### Actors
 Actors are, like messages, a central part of the Actors library. All Actors are sub-classes of the Actor class:
 
 #### Creation of an Actor
-```python
-class MyActor(Actor):
-        def __init__(self):
-            super().__init__("MyActor", logging.NOTSET)
+```cpp
+namespace Actors
+{
+    class MyActor: public Actor
+    {
+    private:
+        // Add data to be used by the actor here.
+    public:
+        MyActor(): Actor("MY_ACTOR") {}
+        ~MyActor() override = default;
+    }; // MyActor
+} // Actors
 ```
 
 It is as simple as that! The Actor takes as argument the name of the Actor.
 It must be a unique name that is easy to identify in ex. log message.
-The second argument is the log level. The default log level is set to CRITICAL.
-Set it to logging.NOTSET to log everything.
+The following example shows how the MyActor can subscribe to DATA_MSG messages:
+
+#### Creation of a Subscriber Actor
+```cpp
+namespace Actors
+{
+    class MyActor: public Actor
+    {
+    public:
+        MyActor(): Actor("MY_ACTOR") {
+            Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg){
+                auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+                Logger::debug() << pubSubMsg;
+            });
+        }
+        ~MyActor() override = default;
+    }; // MyActor
+} // Actors
+```
+
+#### Initialisation of Actors
 
 Initialization of an Actor consist of creating an instance of it. It can be done from anywhere and at any time -
 even an Actor may create new Actors. The instance of an Actor must exists throughout the lifetime of the application.
 
-```python
-if __name__ == "__main__":
-    # Initialize actors
-    actors = [MyActor(), ASecondActor(), AThirdActor()]
-    ...
+```cpp
+int main()
+{
+    // initialise all Actors
+    auto actors = {std::shared_ptr<Actors::Actor>(new Actors::MyActor())};
+
+    // Let the program run for 10 sec. Replace this code with your own.
+    std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+
+    // Stop execution of the Actors.
+    Actors::Actor::stopActors();
+    return 0;
+}
 ```
 
 An Actor is implemented as a facade. As soon we are in the scope of an Actor a set of functions becomes available.
 This includes:
 
-```python
-self.message.subscribe(...)
-self.message.publish(...)
-self.message.stream(...)
+```cpp
+Message::scribe(...)
+Message::publish(...)
+Message::stream(...)
 
-self.logger.debug(...)
-self.logger.info(...)
-self.logger.warning(...)
-self.logger.error(...)
-self.logger.critical(...)
+Logger::debug(...)
+Logger::info(...)
+Logger::warning(...)
+Logger::error(...)
+Logger::critical(...)
 
-self.scheduler.once(...)
-self.scheduler.repeat(...)
-self.scheduler.remove(...)
+Scheduler::once(...)
+Scheduler::repeat(...)
+Scheduler::remove(...)
 
-self.t1 = self.timer(...)
-self.sm = Statemachine(...)
+Timer_t t1 = Timer::getInstance(...)
+Statemachine_t sm = STATEMACHINE(...)
 ```
 
-Observe how the functions are organized into logical groups. This makes it very easy to understand and use them.
+Observe how the functions are organized into logical groups.
+This makes it very easy to understand and use them.
 Only Timer and Statemachine are a bit different due to their usage/nature.
 
-### Logging
-The logging interface of the Actors library is based on the Python logging library.
-The Python library has been slightly adapted so that the name of the Actor is included in the log message.
-Default is to log to a terminal and a file named "actors.log", and the log level is set to CRITICAL.
-The log level can be changed during creation of the Actor.
-In fact, all features of the Python logging library are available and can be changed if needed.
-It is however recommended to use the following interface to log messages:
-
-#### Logging Interface
-```python
-self.logger.debug(msg, *args, **kwargs)
-self.logger.info(msg, *args, **kwargs)
-self.logger.warning(msg, *args, **kwargs)
-self.logger.error(msg, *args, **kwargs)
-self.logger.critical(msg, *args, **kwargs)
-```
-The msg is the message format string, and the args are the arguments which are merged into msg
-using the string formatting operator (source https://docs.python.org/3/library/logging.html).
-
-### Example
-```python
-self.logger.info("Received a MyMessage: " + msg.name + ", " + str(msg.count))
-```
-
-The code will produce the following log entry:
-```
-2023-01-01 23:19:49,175 MyActor INFO: Received a MyMessage: Hello World, 1234
-```
-
-### Scheduler
-A Scheduler can be used to execute a task (function call) at a given time.
-The task can be executed once or repeated until it is removed.
-The scheduled tasks are executed by an adaptable number of Workers.
-If the Workers are not able to execute the tasks as requested by the scheduler additional Workers will be started.
-This situation happens when many tasks are scheduled at the same time.
-The situation is not different from handling messages (see above section) - in fact it is exactly the same,
-and the Actors library will behave the same way:
-
-1. While executing one task another task may be triggered by a scheduler timeout.
-   This could in worse case lead to thread synchronization problems.
-   The Actors library solves this problem by allowing only one task per Actor to execute at a time,
-   i.e. 100 Actors can concurrently execute 100 tasks, but one Actor can only execute one task at a time.
-2. A heavy scheduler load may create the situation described in item 1. To accommodate for this problem,
-   the Actors library will adapt the number of Workers, i.e. another Worker will be added
-   if the tasks cannot be handled as fast as they are triggered. This can in worse case lead to a large amount Workers (threads).
-3. Scheduled tasks and message handling works under the same principles as described above.
-   Only one task/callback function can be executed at time per Actor to avoid synchronization problems.
-
-Again, the Actors library will do what it can to solve the load problems,
-but the root cause of the problem is an insufficient hardware platform and/or
-poor implementations of the tasks/callback functions. It is in these two areas the problem should be resolved.
-
-The scheduler interface is defined as follows:
-
-#### Schedule a task once
-A task can be executed once at a given time by the Scheduler. The once function will return a job id that can be used to cancel/remove the scheduled job.
-
-##### The 'once' function
-```python
-def once(self, msec: int, func) -> int:
-
-# msec: timeout in milliseconds.
-# func: call back function to be executed when the job times out.
-# return: job_id
-```
-
-##### Example
-```python
-job_id = self.scheduler.once(1000, self.task)
-
-def task(self):
-  self.logger.debug("The scheduled job timedout.")
-```
-
-#### Schedule a repeating task
-A job can be scheduled to repeat a task.
-The repeat function will return a job id that can be used to cancel/remove the scheduled job.
-
-##### The 'repeat' function
-```python
-def repeat(self, msec: int, func) -> int:
-
-# msec: timeout in milliseconds.
-# func: call back function to be executed when the job times out.
-# return: job_id
-```
-
-##### Example
-```python
-job_id = self.scheduler.repeat(1000, self.task)
-
-def task(self):
-  self.logger.debug("The scheduled job timedout.")
-```
-
-#### Remove a scheduled job
-A scheduled job can at any time be canceled/removed.
-
-##### The 'remove' function
-```python
-def remove(self, job_id: int) -> None:
-
-# job_id: job to be removed.
-```
-
-##### Example
-```python
-job_id = self.scheduler.repeat(1000, self.task)  # A new job has been scheduled.
-
-self.scheduler.remove(job_id)  # The job is canceled and removed.
-```
-
-### Timers
-Timers are simular to schedulers, except a timer must be started before it is activated.
-A timer can at anytime be stopped or restarted if needed. The timer has a timeout and a callback function.
-The timer is activated when it is started, and when it times out the callback function will be executed.
-
-#### Create a timer
-A timer is created by calling the timer function of the Actor.
-It takes a timeout time and a callback function as argument.
-The Timer is activated at the moment it is started.
-
-```python
-t1 = self.timer(1000, self.func)  # Create a timer
-...
-t1.start()  # Start the timer. It will timeout 1000ms from this moment.
-...
-t1.stop()  # Stop the timer.
-...
-t1.start() # Restart the timer.  It will timeout 1000ms from this moment.
-```
-
-#### Start a timer
-A Timer is activated at the moment it is started. If needed it can at any time be restarted by calling the start function.
-
-##### The 'start' function
-```python
-def start(self) -> None
-```
-
-##### Example
-```python
-t1 = self.timer(1000, self.func)  # Create a timer
-t1.start()  # Start the timer. It will timeout 1000ms from this moment.
-
-def func(self):
-  self.logger.debug("The timer timedout.")
-```
-
-#### Stop a timer
-A timer can at any time be stopped by calling the stop function.
-The stop function will inactivate the timer and preventing it from timing out.
-
-##### The 'stop' function
-```python
-def stop(self) -> None
-```
-
-##### Example
-```python
-t1 = self.timer(1000, self.func)  # Create a timer
-t1.start()  # Start the timer. It will timeout 1000ms from this moment.
-
-t1.stop()  # Stop the timer. The timer is inactivated and it will not time out.
-
-def func(self):
-  self.logger.debug("The timer timedout.")
-```
-
-### State Machines
-State machines comes in many forms and is always hard to understand.
-The state machine is in itself not that hard to understand:
-It can be in one of a number of states and it will initially be in a predefined state.
-The state machine can change from one state to another in response to an event.
-The change from one state to another is called a transition.
-An state machine is in other words defined by list of states, an initial state,
-and the events that trigger the transitions.
-
-#### Creating a State Machine
-A state machine is created, not surprisingly, as an instance of a Statemachine:
-
-```python
-self.sm = Statemachine(initial_state,
-            State(state1, ...),
-            State(state2, ...)
-            ...
-            State(stateN, ...))
-```
-
-It takes as argument an initial state and a number of states. Each state is identified by a unique state id.
-It can be a number, string, enumeration etc. Use enumerations as shown in the example below.
-This is a nice way to define state ids.
-
-#### Example
-The following example shows the definition of a state machine of a door.
-The door can be in state DOOR_CLOSED or DOOR_OPENED. The door is initially in state DOOR_CLOSED.
-
-```python
-class States(Enum):
-    DOOR_OPENED = 0,
-    DOOR_CLOSED = 1
-self.sm = Statemachine(States.DOOR_CLOSED,
-               State(States.DOOR_CLOSED, ...),
-               State(States.DOOR_OPENED, ...))
-```
-
-#### Creating a State
-A State is defined by its id and a number of transitions that each is triggered by an event.
-
-```python
-class States(Enum):
-    DOOR_OPENED = 0,
-    DOOR_CLOSED = 1
-self.sm = Statemachine(States.DOOR_CLOSED,
-                State(States.DOOR_CLOSED,
-                      Transition(...),
-                      ...
-                      Transition(...)),
-                State(States.DOOR_OPENED,
-                      Transition(...),
-                      ...
-                      Transition(...)))
-```
-
-A state id is identified by a unique number, string, enumeration etc. Use enumerations as shown above.
-This is a nice way to define state ids.
-
-Two types of transitions can be used. That is the Message transition
-which is triggered by a Message that is published by an Actor, and the Timer transition
-that is triggered by a timer timeout.
-
-#### Example
-
-```python
-class States(Enum):
-    DOOR_OPENED = 0,
-    DOOR_CLOSED = 1
-self.sm = Statemachine(States.DOOR_CLOSED,
-                State(States.DOOR_CLOSED,
-                      Message(OpenDoorMsg, ...)),
-                State(States.DOOR_OPENED,
-                      Message(CloseDoorMsg, ...),
-                      Timer(1000, ...)))
-```
-
-Observe that there are some name clashes here. The Timer class with we introduced in the previous chapter
-collides with the Transition Timer class. They are two distinct class with almost the same functionality,
-but one is a Transition to be used together with a Statemachine. The other is just a normal timer object.
-
-#### Creating a Transition
-
-To get the full picture of the state machine's capabilities we have to understand transitions.
-A transition is triggered by an event. When it is triggered it will perform an action (optional),
-and finally it will change to a new/next state (optional).
-
-```python
-class States(Enum):
-    DOOR_OPENED = 0,
-    DOOR_CLOSED = 1
-self.sm = Statemachine(States.DOOR_CLOSED,
-                       State(States.DOOR_CLOSED,
-                             Message(OpenDoorMsg, action=self.open_door, next_state=States.DOOR_OPENED)),
-                       State(States.DOOR_OPENED,
-                             Message(CloseDoorMsg, action=self.close_door, next_state=States.DOOR_CLOSED),
-                             Timer(1000, action=self.auto_close_door, next_state=States.DOOR_CLOSED)))
-```
-
-Two types of transitions exists. That is the Message transition which is triggered by a Message event
-published by an Actor, and the Timer transition that is triggered by a timer timeout.
-
-The action part is simply a function or lambda expression that is executed as part handling the transition.
-When the operation is complete the transition will set the new/next state of the state machine.
-Observe that both the action and next_state are optional.
-
-#### Observations related to State Machines
-
-The state machine is tricky construction, but care has been taken to make it simple and safe to use:
-
-1. A state machine is tightly coupled to an Actor. In fact, the state machine can not be used outside the scope of an Actor.
-2. A transition is an atomic operation, but with some restrictions. It works as follows:
-    1. A message is published by an Actor.
-    2. The state machine will check if it has a transition that is triggered by the message event.
-    3. If this is the case, the state machine will be locked until the transition has been executed.
-    4. A dedicated Worker thread will first execute the action and then set the next state of the state machine.
-    5. The state machine is unlocked and new events can be handled.
-
-   If a timer timeout during the execution of a transition it will be dropped.
-   An incoming Message event will be postponed if a transaction is being executed.
-3. An Actor can define more state machines. The state machines are updated concurrently
-   and there is no way to determine if one state machine is updated before the other.
-4. The Timer class name collides with the transition Timer class.
-   If you need to use both in the same Actor care must be taken.
-5. The state machine can slow down due to constraints with execution of transitions.
-6. The implementation of the state machine is complex and needs to be refactored.
-
-### Message Streams
+To be continued ...

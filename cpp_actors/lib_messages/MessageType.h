@@ -24,11 +24,11 @@ namespace Messages
 {
     enum MessageType
     {
-        NONE, // Don't remove or rename.
+        NONE, // Don't remove or rename. NONE shall always be the first element.
         PUB_SUB, // Used in example publish subscriber.
         OPEN_DOOR, // Used in example statemachine.
         CLOSE_DOOR, // Used in example statemachine.
-        NO_OF_MSG_TYPES // Don't remove or rename.
+        NO_OF_MSG_TYPES // Don't remove or rename. NO_OF_MSG_TYPES hall always be the last element.
     };
 } // Messages
 

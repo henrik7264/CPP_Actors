@@ -23,9 +23,9 @@
 int main()
 {
     // initialise all Actors
-    auto actors = {PUBLISHER, SUBSCRIBER};
+    auto actors = {PUBLISHER(), SUBSCRIBER()};
     
     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-    Executors::Executor::getInstance().stopExecutor();
+    Actors::Actor::stopActors();
     return 0;
 }

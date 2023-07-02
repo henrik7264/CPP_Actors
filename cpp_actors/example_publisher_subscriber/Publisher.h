@@ -22,7 +22,7 @@
 #include "Actor.h"
 
 // Only defined to simplify initialization of actors - see main.cpp
-#define PUBLISHER std::shared_ptr<Actors::Actor>(new Actors::Publisher())
+#define PUBLISHER() std::shared_ptr<Actors::Actor>(new Actors::Publisher())
 
 
 namespace Actors

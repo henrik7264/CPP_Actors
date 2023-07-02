@@ -21,7 +21,7 @@
 #include "Actor.h"
 
 // Only defined to simplify initialization of actors - see main.cpp
-#define SUBSCRIBER std::shared_ptr<Actors::Actor>(new Actors::Subscriber())
+#define SUBSCRIBER() std::shared_ptr<Actors::Actor>(new Actors::Subscriber())
 
 
 namespace Actors

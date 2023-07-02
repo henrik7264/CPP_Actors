@@ -195,6 +195,8 @@ namespace Actors
     public:
         explicit Actor(const std::string& name): Message(actorMutex), Scheduler(actorMutex), Timer(actorMutex), Logger(name) {}
         ~Actor() override = default;
+
+        static void stopActors() {Executors::Executor::getInstance().stopExecutor();}
     }; // Actor
 } // Actors
 

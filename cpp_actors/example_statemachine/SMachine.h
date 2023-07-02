@@ -21,7 +21,7 @@
 #include "Actor.h"
 
 // Only defined to simplify initialization of actors - see main.cpp
-#define SMACHINE std::shared_ptr<Actors::Actor>(new Actors::SMachine())
+#define SMACHINE() std::shared_ptr<Actors::Actor>(new Actors::SMachine())
 
 namespace Actors
 {
