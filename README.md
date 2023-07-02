@@ -77,14 +77,14 @@ I foresee at least two phases for the library. Phase1 is related to only adding 
   When we take this view reactive programming becomes a natural way of processing the messages.
   See some of the advantages of using reactive programming on ttps://reactivex.io - they are awesome.
 
-<p align="center">
+<p style="text-align:center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Phase1.png" height="400"><br>
   Phase1: Focus is to provide different features for Actors.
 </p>
 
 The second phase is only related to create a distributed system of Actors that can communicate with each other on multiple platforms and hosts.
 
-<p align="center">
+<p style="text-align:center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Phase2.png" height="400"><br>
   Phase2: Focus is to provide a distributed environment for sharing messages between Actors.
 </p>
@@ -283,7 +283,7 @@ This takes place in the Dispatcher where a number of Worker threads will take ca
 It is actually the Executor class that takes care of the execution of the function.
 It is a helper class/function to the Dispatcher.
 
-<p align="center">
+<p style="text-align:center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Publish_Subscribe.png"><br>
   Sequence diagram showing the subscribe and publish mechanism of the Actors Library.
 </p>
@@ -310,11 +310,8 @@ Actors are, like messages, a central part of the Actors library. All Actors are 
 ```cpp
 namespace Actors
 {
-    class MyActor: public Actor
+    struct MyActor: public Actor
     {
-    private:
-        // Add data to be used by the actor here.
-    public:
         MyActor(): Actor("MY_ACTOR") {}
         ~MyActor() override = default;
     }; // MyActor
@@ -323,19 +320,18 @@ namespace Actors
 
 It is as simple as that! The Actor takes as argument the name of the Actor.
 It must be a unique name that is easy to identify in ex. log message.
-The following example shows how the MyActor can subscribe to DATA_MSG messages:
+The following example shows how the MyActor subscribes to DATA_MSG messages:
 
-#### Creation of a Subscriber Actor
+#### Creation of an Actor that subscribes to DATA_MSG messages
 ```cpp
 namespace Actors
 {
-    class MyActor: public Actor
+    struct MyActor: public Actor
     {
-    public:
         MyActor(): Actor("MY_ACTOR") {
             Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg){
                 auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
-                Logger::debug() << pubSubMsg;
+                Logger::debug() << dataMsg;
             });
         }
         ~MyActor() override = default;
@@ -363,6 +359,28 @@ int main()
 }
 ```
 
+The initialization of the actors in the above example is a bit cumbersome -
+especially if there are many actors to be initialized.
+To simplify the code add the following preprocessor statement to the MyActor file:
+
+```cpp
+// Only defined to simplify initialization of actors.
+#define MY_ACTOR() std::shared_ptr<Actors::Actor>(new Actors::MyActor())
+```
+
+Now it will be possible to initialize the Actors as follows:
+
+```cpp
+int main()
+{
+    // initialise all Actors
+    auto actors = {MY_ACTOR()};
+    
+}
+```
+
+#### Actors provided interfaces
+
 An Actor is implemented as a facade. As soon we are in the scope of an Actor a set of functions becomes available.
 This includes:
 
@@ -387,6 +405,154 @@ Statemachine_t sm = STATEMACHINE(...)
 
 Observe how the functions are organized into logical groups.
 This makes it very easy to understand and use them.
-Only Timer and Statemachine are a bit different due to their usage/nature.
+Only Timer and Statemachine are a bit different due to their nature.
+
+### Scheduler
+A Scheduler can be used to execute a task (function call) at a given time.
+The task can be executed once or repeated until it is removed.
+The scheduled tasks are executed by an adaptable number of Workers.
+If the Workers are not able to execute the tasks as requested by the scheduler
+additional Workers will be started. This situation happens when many tasks are scheduled at the same time.
+The situation is not different from handling messages (see above section) - in fact it is exactly the same,
+and the Actors library will behave the same way:
+
+1. While executing one task another task may be triggered by a scheduler timeout.
+   This could in worse case lead to thread synchronization problems.
+   The Actors library solves this problem by allowing only one task per Actor to execute at a time,
+   i.e. 100 Actors can concurrently execute 100 tasks, but one Actor can only execute one task at a time.
+2. A heavy scheduler load may create the situation described in item 1. To accommodate for this problem,
+   the Actors library will adapt the number of Workers, i.e. another Worker will be added
+   if the tasks cannot be handled as fast as they are triggered. This can in worse case lead to a large amount Workers (threads).
+3. Scheduled tasks and message handling works under the same principles as described above.
+   Only one task/callback function can be executed at time per Actor to avoid synchronization problems.
+
+Again, the Actors library will do what it can to solve the load problems,
+but the root cause of the problem is an insufficient hardware platform and/or
+poor implementations of the tasks/callback functions.
+It is in these two areas the problem should be resolved.
+
+The scheduler interface is defined as follows:
+
+#### Schedule a task once
+A task can be executed once at a given time by the Scheduler.
+The once function will return a job id that can be used to cancel/remove the scheduled job.
+
+##### The 'once' function
+```cpp
+Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
+Schedulers::JobId once(long msec, const std::function<void()>& func)
+
+# msec: timeout in milliseconds.
+# func: call back function to be executed when the job times out.
+# return: jobId - umber to indentify the scheduled job.
+```
+
+##### Example
+```cpp
+auto jobId = Scheduler::once(1000, [this]() { // A new job is scheduled.
+    logger::debug << "Scheduled job timed out!";   
+}
+```
+
+#### Schedule a repeating task
+A job can be scheduled to repeat a task.
+The repeat function will return a job id that can be used to cancel/remove the scheduled job.
+
+##### The 'repeat' function
+
+```cpp
+Schedulers::JobId repeat(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
+Schedulers::JobId repeat(long msec, const std::function<void()>& func)
+
+# msec: timeout in milliseconds.
+# func: call back function to be executed when the job times out.
+# return: jobId - number to indentify the scheduled job.
+```
+
+##### Example
+```cpp
+auto jobId = Scheduler::repeat(1000, [this]() { // A new job is scheduled.
+    logger::debug << "Scheduled job timed out!";   
+}
+```
+
+#### Remove a scheduled job
+A scheduled job can at any time be canceled/removed.
+
+##### The 'remove' function
+```cpp
+void remove(Schedulers::JobId id)
+
+# id: job to be removed.
+```
+
+##### Example
+```cpp
+auto jobId = Scheduler::repeat(1000, [this]() { // A new job is scheduled.
+    logger::debug << "Scheduled job timed out!"    
+}
+// ...
+Scheduler::remove(jobId)  // The job is canceled and removed.
+```
+
+### Timers
+Timers are similar to schedulers, except a timer must be started before it is activated.
+A timer can at anytime be stopped or restarted if needed. The timer has a timeout and a callback function.
+The timer is activated when it is started, and when it times out the callback function will be executed.
+
+#### Create a timer
+A timer is created by calling the timer function of the Actor.
+It takes a timeout time and a callback function as argument.
+The Timer is activated at the moment it is started.
+
+```cpp
+Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+    logger::debug << "Timer t1 timed out!"
+}
+//...
+t1.start()  // Start the timer. It will timeout 1000ms from this moment.
+//...
+t1.stop()  // Stop the timer.
+// ...
+t1.start() // Restart the timer.  It will timeout 1000ms from this moment.
+```
+
+#### Start a timer
+A Timer is activated at the moment it is started. 
+If needed it can at any time be restarted by calling the start function.
+
+##### The 'start' function
+```cpp
+void start()
+```
+
+##### Example
+```cpp
+Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+    logger::debug << "Timer t1 timed out!"
+}
+//...
+t1.start()  // Start the timer. It will timeout 1000ms from this moment.
+```
+
+#### Stop a timer
+A timer can at any time be stopped by calling the stop function.
+The stop function will inactivate the timer and preventing it from timing out.
+
+##### The 'stop' function
+```cpp
+void stop()
+```
+
+##### Example
+```cpp
+Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+    logger::debug << "Timer t1 timed out!"
+}
+//...
+t1.start()  // Start the timer. It will timeout 1000ms from this moment.
+//...
+t1.stop()  // Stop the timer.
+```
 
 To be continued ...
