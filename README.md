@@ -76,15 +76,15 @@ I foresee at least two phases for the library. Phase1 is related to only adding 
   we could also look at it as system of message streams that are processed by the Actors.
   When we take this view reactive programming becomes a natural way of processing the messages.
   See some of the advantages of using reactive programming on ttps://reactivex.io - they are awesome.
-
-<p style="text-align:center">
+  
+<p align="center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Phase1.png" height="400"><br>
   Phase1: Focus is to provide different features for Actors.
 </p>
 
 The second phase is only related to create a distributed system of Actors that can communicate with each other on multiple platforms and hosts.
 
-<p style="text-align:center">
+<p align="center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Phase2.png" height="400"><br>
   Phase2: Focus is to provide a distributed environment for sharing messages between Actors.
 </p>
@@ -283,7 +283,7 @@ This takes place in the Dispatcher where a number of Worker threads will take ca
 It is actually the Executor class that takes care of the execution of the function.
 It is a helper class/function to the Dispatcher.
 
-<p style="text-align:center">
+<p align="center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Publish_Subscribe.png"><br>
   Sequence diagram showing the subscribe and publish mechanism of the Actors Library.
 </p>
@@ -442,9 +442,9 @@ The once function will return a job id that can be used to cancel/remove the sch
 Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
 Schedulers::JobId once(long msec, const std::function<void()>& func)
 
-# msec: timeout in milliseconds.
-# func: call back function to be executed when the job times out.
-# return: jobId - umber to indentify the scheduled job.
+// msec: timeout in milliseconds.
+// func: call back function to be executed when the job times out.
+// return: jobId - umber to indentify the scheduled job.
 ```
 
 ##### Example
@@ -464,9 +464,9 @@ The repeat function will return a job id that can be used to cancel/remove the s
 Schedulers::JobId repeat(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
 Schedulers::JobId repeat(long msec, const std::function<void()>& func)
 
-# msec: timeout in milliseconds.
-# func: call back function to be executed when the job times out.
-# return: jobId - number to indentify the scheduled job.
+// msec: timeout in milliseconds.
+// func: call back function to be executed when the job times out.
+// return: jobId - number to indentify the scheduled job.
 ```
 
 ##### Example
@@ -483,7 +483,7 @@ A scheduled job can at any time be canceled/removed.
 ```cpp
 void remove(Schedulers::JobId id)
 
-# id: job to be removed.
+// id: job to be removed.
 ```
 
 ##### Example
