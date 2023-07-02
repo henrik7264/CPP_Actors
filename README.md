@@ -236,8 +236,8 @@ that is executed each time a message of that type is published.
 ```cpp
 void subscribe(MessageType type, const std::function<void(Message_ptr)>& func)
 
-# type: A specified message type. The available messages types are defined in MessageType.h
-# func: A lambda or callback function. The function must take Message_ptr as argument.
+// type: A specified message type. The available messages types are defined in MessageType.h
+// func: A lambda or callback function. The function must take Message_ptr as argument.
 ```
 
 ##### Example
@@ -257,7 +257,6 @@ void cbFunc(const Message_ptr& msg) {
     auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
     Logger::debug() << dataMsg;
 }
-});
 ```
 
 #### Publish a Message
@@ -267,7 +266,7 @@ An Actor publishes messages by means of the publish function.
 ```cpp
 void publish(Messages::Message* msg)
 
-# msg: The message (instance of a class) to be published.
+// msg: The message (instance of a class) to be published.
 ```
 
 ##### Example
