@@ -51,9 +51,12 @@ namespace Executors
 
         void stop() {
             doLoop = false;
+            auto timeout = 1; //ms
             while (!done) {
                 jobQueue.push(std::make_pair([](const Message_ptr &) {}, noneMsg));
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
+                if (timeout <= 512)
+                    timeout *= 2;
             }
             if (trd.joinable())
                 trd.join();

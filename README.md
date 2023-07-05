@@ -339,7 +339,6 @@ namespace Actors
 ```
 
 #### Initialisation of Actors
-
 Initialization of an Actor consist of creating an instance of it. It can be done from anywhere and at any time -
 even an Actor may create new Actors. The instance of an Actor must exists throughout the lifetime of the application.
 
@@ -379,7 +378,6 @@ int main()
 ```
 
 #### Actors provided interfaces
-
 An Actor is implemented as a facade. As soon we are in the scope of an Actor a set of functions becomes available.
 This includes:
 
@@ -402,9 +400,34 @@ Timer_t t1 = Timer::getInstance(...)
 Statemachine_t sm = STATEMACHINE(...)
 ```
 
-Observe how the functions are organized into logical groups.
-This makes it very easy to understand and use them.
+Observe how the functions are organized into logical groups. This makes it very easy to understand and use them.
 Only Timer and Statemachine are a bit different due to their nature.
+
+### Logging
+Logging is fundamentally a debugging facility that allows the programmer to printout information
+about the Actors internal state. Five log levels are provided where each level indicates
+the severity of the problem. Each loglevel returns a reference to a logging object which
+actually is a std::ostringstream. This means that the well-known C++ stream insertion operator
+“<<” can be used to compose the logging messages. Log messages will in the end be streamed to std::clog.
+
+#### Logging Interface
+```cpp
+Logger::debug() << "Here follows a stream of data separated by <<";
+Logger::info() << "Here follows a stream of data separated by <<";
+Logger::warning() << "Here follows a stream of data separated by <<";
+Logger::error() << "Here follows a stream of data separated by <<";
+Logger::fatal() << "Here follows a stream of data separated by <<";
+```
+
+### Example
+```cpp
+Logger::info() << "Received a Data Message " << msg->getName();
+```
+
+This will produce the following log entry:
+```
+2023-01-01 23:19:49,175 MyActor INFO: Received a Data Message: Hello World
+```
 
 ### Scheduler
 A Scheduler can be used to execute a task (function call) at a given time.
