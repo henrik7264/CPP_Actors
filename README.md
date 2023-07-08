@@ -577,4 +577,120 @@ t1.start()  // Start the timer. It will timeout 1000ms from this moment.
 t1.stop()  // Stop the timer.
 ```
 
-To be continued ...
+### State Machines
+State machines comes in many forms and is always hard to understand.
+The state machine is in itself not that hard to understand:
+It can be in one of a number of states and it will initially be in a predefined state.
+The state machine can change from one state to another in response to an event.
+The change from one state to another is called a transition.
+An state machine is in other words defined by list of states, an initial state,
+and the events that trigger the transitions.
+
+#### Creating a State Machine
+A state machine is created, not surprisingly, as an instance of a Statemachine. 
+To simplify the definition or writing of a state machine,
+macros named STATEMACHINE, STATE, MESSAGE, TIMER and NEXT_STATE have been defined.
+A general template for a state machine is shown here:
+
+```cpp
+Statemachine_t sm = STATEMACHINE(initial_state,
+                        STATE(state1, ...),
+                        STATE(state2, ...)
+                        ...
+                        STATE(stateN, ...))
+```
+
+It takes as argument an initial state and a number of states. Each state is identified by a unique state id.
+It can be a number or enumeration. Use enumerations as shown in the example below.
+This is a nice way to define state ids.
+
+#### Example
+The following example shows the definition of a state machine of a door.
+The door can be in state DOOR_CLOSED or DOOR_OPENED. The door is initially in state DOOR_CLOSED.
+
+```cpp
+enum States {DOOR_OPENED, DOOR_CLOSED};
+StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
+                                 STATE(DOOR_CLOSED, ...),
+                                 STATE(DOOR_OPENED, ...));
+```
+
+#### Creating a State
+A State is defined by its id and a number of transitions that each is triggered by an event.
+
+```cpp
+enum States {STATE_A, STATE_N};
+StateMachine_t sm = STATEMACHINE(STATE_A,
+                                 STATE(STATE_A,
+                                       TRANSITION(...),
+                                       ...
+                                       TRANSITION(...)),
+                                 STATE(STATE_N, ...)
+                                       TRANSITION(...),
+                                       ...
+                                       TRANSITION(...)));
+```
+
+Two types of transitions can be used. That is the MESSAGE transition
+which is triggered by a Message that is published by an Actor, and the TIMER transition
+that is triggered by a timer timeout.
+
+#### Example
+
+```cpp
+enum States {DOOR_OPENED, DOOR_CLOSED};
+StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
+                                 STATE(DOOR_CLOSED,
+                                       MESSAGE(MessageType::OPEN_DOOR, ...)),
+                                 STATE(DOOR_OPENED,
+                                        MESSAGE(MessageType::CLOSE_DOOR, ...),
+                                        TIMER(1000, ...)));
+```
+
+#### Creating a Transition
+
+To get the full picture of the state machine's capabilities we have to understand transitions.
+A transition is triggered by an event. When it is triggered it will perform an action (optional),
+and finally it will change to a new/next state (optional).
+
+```cpp
+enum States {DOOR_OPENED, DOOR_CLOSED};
+StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
+                         STATE(DOOR_CLOSED,
+                               MESSAGE(MessageType::OPEN_DOOR, NEXT_STATE(DOOR_OPENED), [this](const Message_ptr& msg){
+                                   Logger::debug() << "Opening door ...";})),
+                         STATE(DOOR_OPENED,
+                               MESSAGE(MessageType::CLOSE_DOOR, NEXT_STATE(DOOR_CLOSED), [this](const Message_ptr& msg){
+                                   Logger::debug() << "Closing door ...";}),
+                               TIMER(1000, NEXT_STATE(DOOR_CLOSED), [this](){
+                                   Logger::debug() << "Auto closing door ...";})));
+
+```
+
+Two types of transitions exists. That is the MESSAGE transition which is triggered by a Message event
+published by an Actor, and the TIMER transition that is triggered by a timer timeout.
+
+The action part is simply a function or lambda expression that is executed as part handling the transition.
+When the operation is complete the transition will set the new/next state of the state machine.
+Observe that both the action and next_state are optional.
+
+#### Observations related to State Machines
+
+The state machine is tricky construction, but care has been taken to make it simple and safe to use:
+
+1. A state machine is tightly coupled to an Actor. In fact, the state machine can not be used outside the scope of an Actor.
+2. A transition is an atomic operation, but with some restrictions. It works as follows:
+    1. A message is published by an Actor.
+    2. The state machine will check if it has a transition that is triggered by the message event.
+    3. If this is the case, the state machine will be locked until the transition has been executed.
+    4. A dedicated Worker thread will first execute the action and then set the next state of the state machine.
+    5. The state machine is unlocked and new events can be handled.
+
+   If a timer timeout during the execution of a transition it will be dropped.
+   An incoming Message event will be postponed if a transaction is being executed.
+3. An Actor can define more state machines. The state machines are updated concurrently
+   and there is no way to determine if one state machine is updated before the other.
+4. The state machine can slow down due to constraints with execution of transitions.
+5. The implementation of the state machine is complex and needs to be refactored and optimized.
+
+### Message Streams
