@@ -39,6 +39,7 @@ namespace Actors
                     Message::publish(new CloseDoorMsg());
             });
         }
+
         ~Publisher() override = default;
     }; // Publisher
 } // Actors

@@ -18,6 +18,7 @@
 
 #ifndef CPP_ACTORS_SCHEDULER_H
 #define CPP_ACTORS_SCHEDULER_H
+#include <cassert>
 #include <climits>
 #include <functional>
 #include <tuple>
@@ -28,64 +29,108 @@
 #include <mutex>
 #include <condition_variable>
 #include "Queue.h"
-#include "Executor.h"
 
 
 namespace Schedulers
 {
-    typedef unsigned long JobId;
+    typedef std::function<void()> Function_t;
+    typedef unsigned long JobId_t;
+    static JobId_t NextJobId = 0;
+    static const JobId_t JobIdMax = ULONG_MAX;
+    typedef unsigned long RepeatTimes_t;
+    static const JobId_t RepeatTimesMax = ULONG_MAX;
 
-    class Scheduler
+    class Worker
     {
     private:
         bool doLoop = true;
-        JobId jobId = 0;
-        std::map<JobId, std::tuple<std::chrono::steady_clock::time_point, std::chrono::duration<long,std::milli>, std::function<void()>, unsigned int>> jobs;
-        std::mutex mutex;
-        std::condition_variable condVar;
         std::thread trd;
+        Queues::Queue <Function_t> jobQueue{nullptr};
 
-        Scheduler(): trd(std::thread([this]() {run();})) {}
-        virtual ~Scheduler() {stop();}
-
-        void run() {
+        void run()
+        {
             while (doLoop) {
-                std::unique_lock<std::mutex> lock(mutex);
-                if (jobs.empty())
-                    condVar.wait(lock);
-                else {
-                    auto nextTimeout = std::chrono::time_point<std::chrono::steady_clock>::max();
-                    for (auto job: jobs) {
-                        auto jobTimeout = std::get<0>(job.second);
-                        auto jobRepeat = std::get<3>(job.second);
-                        if (jobRepeat > 0 && jobTimeout < nextTimeout)
-                            nextTimeout = jobTimeout;
-                    }
-                    if (nextTimeout > std::chrono::steady_clock::now())
-                        condVar.wait_until(lock, nextTimeout);
-                }
-
-                auto currentTime = std::chrono::steady_clock::now();
-                for (auto job: jobs) {
-                    auto id = job.first;
-                    auto jobTimeout = std::get<0>(job.second);
-                    auto jobDuration = std::get<1>(job.second);
-                    auto jobFunction = std::get<2>(job.second);
-                    auto jobRepeat = std::get<3>(job.second);
-
-                    if (jobRepeat > 0 && jobTimeout <= currentTime) {
-                        Executors::Executor::getInstance().exec(jobFunction);
-                        jobs[id] = std::make_tuple(jobTimeout + jobDuration, jobDuration, jobFunction, jobRepeat - 1);
-                    }
-                }
+                auto func = jobQueue.get(100);
+                if (doLoop && func)
+                    func();
             }
         }
 
         void stop() {
             doLoop = false;
-            condVar.notify_one();
             if (trd.joinable())
                 trd.join();
+        }
+
+    public:
+        Worker() { trd = std::thread([this]() { run(); }); }
+        virtual ~Worker() { stop(); }
+
+        inline Queues::Queue <Function_t>& getQueue() { return jobQueue; }
+    }; // Worker
+
+
+    class Scheduler
+    {
+    private:
+        bool doLoop = true;
+        std::thread trd;
+        std::mutex mutex;
+        std::condition_variable jobAvailable;
+        std::map<JobId_t, std::tuple<Function_t, std::chrono::steady_clock::time_point, std::chrono::duration<long,std::milli>, RepeatTimes_t>> jobs;
+        Worker* worker = new Worker();
+        std::size_t noWorkers = 1;
+
+        void run() {
+            while (doLoop) {
+                std::unique_lock<std::mutex> lock(mutex);
+                if (doLoop && jobs.empty())
+                    jobAvailable.wait(lock);
+                else {
+                    auto nextTimeout = std::chrono::time_point<std::chrono::steady_clock>::max();
+                    for (auto job: jobs) {
+                        auto jobTimeout = std::get<1>(job.second);
+                        auto jobRepeatTimes = std::get<3>(job.second);
+                        if ((jobRepeatTimes > 0) && (jobTimeout < nextTimeout))
+                            nextTimeout = jobTimeout;
+                    }
+                    if (doLoop && (nextTimeout > std::chrono::steady_clock::now()))
+                        jobAvailable.wait_until(lock, nextTimeout);
+                }
+
+                std::list<JobId_t> jobsToRemove;
+                auto currentTime = std::chrono::steady_clock::now();
+                for (auto job: jobs) {
+                    auto jobId = job.first;
+                    auto func = std::get<0>(job.second);
+                    auto jobTimeout = std::get<1>(job.second);
+                    auto jobDuration = std::get<2>(job.second);
+                    auto jobRepeatTimes = std::get<3>(job.second);
+
+                    if (doLoop && (noWorkers > 0) && (jobRepeatTimes > 0) && (jobTimeout <= currentTime)) {
+                        worker->getQueue().push(func);
+                        jobs[jobId] = std::make_tuple(func, jobTimeout + jobDuration, jobDuration, jobRepeatTimes-1);
+                        if (jobRepeatTimes == 1)
+                            jobsToRemove.push_back(jobId);
+                    }
+                }
+                for (auto jobId: jobsToRemove)
+                    jobs.erase(jobId);
+            }
+        }
+
+        void stop() {
+            doLoop = false;
+            jobAvailable.notify_one();
+            if (trd.joinable())
+                trd.join();
+        }
+
+        Scheduler() {trd = std::thread([this]() {run();});}
+        virtual ~Scheduler() {
+            stop();
+            delete worker;
+            noWorkers = 0;
         }
 
     public:
@@ -94,38 +139,37 @@ namespace Schedulers
             return MyScheduler;
         }
 
-        JobId onceIn(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
+        JobId_t onceIn(std::chrono::duration<long, std::milli> msec, const Function_t& func) {
             std::unique_lock<std::mutex> lock(mutex);
-            jobId++;
-            jobs[jobId] = std::make_tuple(std::chrono::steady_clock::now()+msec, msec, func, 1);
-            condVar.notify_one();
+            auto jobId = NextJobId++;
+            jobs[jobId] = std::make_tuple(func, std::chrono::steady_clock::now()+msec, msec, 1);
+            jobAvailable.notify_one();
             return jobId;
         }
 
-        JobId onceIn(long msec, const std::function<void()>& func) {
+        JobId_t onceIn(long msec, const Function_t& func) {
             return onceIn(std::chrono::duration<long, std::milli>(msec), func);
         }
 
-        JobId repeatEvery(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
+        JobId_t repeatEvery(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
             std::unique_lock<std::mutex> lock(mutex);
-            jobId++;
-            jobs[jobId] = std::make_tuple(std::chrono::steady_clock::now()+msec, msec, func, UINT_MAX);
-            condVar.notify_one();
+            auto jobId = NextJobId++;
+            jobs[jobId] = std::make_tuple(func, std::chrono::steady_clock::now()+msec, msec, RepeatTimesMax);
+            jobAvailable.notify_one();
             return jobId;
         }
 
-        JobId repeatEvery(long msec, const std::function<void()>& func) {
+        JobId_t repeatEvery(long msec, const Function_t& func) {
             return repeatEvery(std::chrono::duration<long, std::milli>(msec), func);
         }
 
-        void removeJob(JobId id) {
+        void removeJob(const JobId_t jobId) {
             std::unique_lock<std::mutex> lock(mutex);
-            if (jobs.find(id) != jobs.end()) {
-                jobs.erase(id);
-                condVar.notify_one();
+            if (jobs.find(jobId) != jobs.end()) {
+                jobs.erase(jobId);
+                jobAvailable.notify_one();
             }
         }
     }; // Scheduler
 } // Schedulers
-
 #endif //CPP_ACTORS_SCHEDULER_H

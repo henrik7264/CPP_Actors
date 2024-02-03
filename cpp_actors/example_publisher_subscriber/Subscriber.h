@@ -17,6 +17,8 @@
 
 #ifndef CPP_ACTORS_SUBSCRIBER_H
 #define CPP_ACTORS_SUBSCRIBER_H
+#include <chrono>
+#include <thread>
 #include "Messages.h"
 #include "Actor.h"
 
@@ -28,14 +30,19 @@ namespace Actors
 {
     class Subscriber: public Actor
     {
+    private:
+        int i = 0;
+
     public:
-        Subscriber(): Actor("SUBSCRIBER") {
-            Message::subscribe(MessageType::PUB_SUB, [this](const Message_ptr& msg){
+        Subscriber() : Actor("SUBSCRIBER")
+        {
+            Message::subscribe(Message_t::PUB_SUB, [this](const Message_ptr &msg) {
                 auto* pubSubMsg = dynamic_cast<PubSubMsg*>(msg.get());
                 Logger::debug() << pubSubMsg;
+                i++;
             });
         }
-        ~Subscriber() override = default;
+        ~Subscriber() override {printf("SUBSCRIBER called %d times\n", i);}
     }; // Subscriber
 } // Actors
 

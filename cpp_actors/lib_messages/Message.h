@@ -18,7 +18,7 @@
 #ifndef CPP_ACTORS_MESSAGE_H
 #define CPP_ACTORS_MESSAGE_H
 #include <memory>
-#include "MessageType.h"
+#include "MessageTypes.h"
 
 
 namespace Messages
@@ -26,13 +26,13 @@ namespace Messages
     class Message
     {
     private:
-        MessageType msgType;
+        Message_t msgType;
 
     public:
-        explicit Message(MessageType type): msgType(type) {}
+        explicit Message(Message_t type): msgType(type) {}
         virtual ~Message() = default;
 
-        MessageType getMsgType() const {return msgType;}
+        Message_t getMsgType() const {return msgType;}
     }; // Message
 
     typedef std::shared_ptr<Message> Message_ptr;

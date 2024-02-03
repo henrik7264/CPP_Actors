@@ -28,12 +28,13 @@ namespace Queues
     class Queue
     {
     private:
+        T emptyElem;
         std::queue<T> queue;
         std::mutex mutex;
         std::condition_variable itemAvailable;
 
     public:
-        Queue() = default;
+        explicit Queue(const T emptyElem): emptyElem(emptyElem) {};
         Queue(const Queue<T> &) = delete;
         Queue& operator=(const Queue<T>&) = delete;
         virtual ~Queue() = default;
@@ -42,9 +43,26 @@ namespace Queues
             std::unique_lock<std::mutex> lock(mutex);
             while (queue.empty())
                 itemAvailable.wait(lock);
-            auto item = queue.front();
+            auto elem = queue.front();
             queue.pop();
-            return item;
+            return elem;
+        }
+
+        T get(std::chrono::duration<long, std::milli> msec) {
+            std::unique_lock<std::mutex> lock(mutex);
+            std::cv_status status = std::cv_status::no_timeout;
+            while (queue.empty() && (status == std::cv_status::no_timeout))
+                status = itemAvailable.wait_for(lock, msec);
+            auto elem = emptyElem;
+            if (status == std::cv_status::no_timeout) {
+                elem = queue.front();
+                queue.pop();
+            }
+            return elem;
+        }
+
+        T get(long msec) {
+            return get(std::chrono::duration<long, std::milli>(msec));
         }
 
         void push(const T& item) {

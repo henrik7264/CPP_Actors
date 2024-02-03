@@ -21,33 +21,45 @@
 #include <chrono>
 #include <mutex>
 #include <functional>
+#include <utility>
 #include "Scheduler.h"
 
 
 namespace Timers
 {
-    class Timer
+    class Timer: public MemoryManagement::Memory
     {
     private:
-        Schedulers::JobId jobId;
+        bool markedForDeletion;
+        std::mutex& actorMutex;
+        Schedulers::JobId_t jobId;
         std::chrono::duration<long, std::milli> msec;
-        std::function<void()> func;
+        Schedulers::Function_t func;
+
+        void timeout() {
+            if (!markedForDeletion) {
+                std::unique_lock<std::mutex> lock(actorMutex);
+                func();
+            }
+        }
 
     public:
-        Timer(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func): jobId(0), msec(msec), func(func) {}
-        Timer(long msec, const std::function<void()>& func): Timer(std::chrono::duration<long, std::milli>(msec), func) {}
-        virtual ~Timer() {stop();}
+        Timer(std::mutex& actorMutex, std::chrono::duration<long, std::milli> msec, Schedulers::Function_t func): markedForDeletion(false), actorMutex(actorMutex), jobId(Schedulers::JobIdMax), msec(msec), func(std::move(func)) {}
+        Timer(std::mutex& actorMutex, long msec, const Schedulers::Function_t& func): Timer(actorMutex, std::chrono::duration<long, std::milli>(msec), func) {}
+        virtual ~Timer() {markedForDeletion = true; stop();}
 
         void stop() {
-            if (jobId != 0) {
+            if (jobId != Schedulers::JobIdMax) {
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
-                jobId = 0;
+                jobId = Schedulers::JobIdMax;
             }
         }
 
         void start() {
-            stop();
-            jobId = Schedulers::Scheduler::getInstance().onceIn(msec, func);
+            if (!markedForDeletion) {
+                stop();
+                jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
+            }
         }
     }; // Timer
 } // Timers

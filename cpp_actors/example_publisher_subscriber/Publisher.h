@@ -35,11 +35,10 @@ namespace Actors
     public:
         Publisher(): Actor("PUBLISHER") {
             Scheduler::repeat(1000, [this]() {
-                Message::publish(new PubSubMsg("Hello no. " + std::to_string(i)));
-                i++;
+                Message::publish(new PubSubMsg("Hello no. " + std::to_string(i++)));
             });
         }
-        ~Publisher() override = default;
+        ~Publisher() override {printf("PUBLISHER called %d times\n", i);};
     }; // Publisher
 } // Actors
 

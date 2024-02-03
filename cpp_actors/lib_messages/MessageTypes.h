@@ -16,20 +16,20 @@
  */
 
 
-#ifndef CPP_ACTORS_MESSAGETYPE_H
-#define CPP_ACTORS_MESSAGETYPE_H
+#ifndef CPP_ACTORS_MESSAGETYPES_H
+#define CPP_ACTORS_MESSAGETYPES_H
 
 
 namespace Messages
 {
-    enum MessageType
+    enum Message_t
     {
         NONE, // Don't remove or rename. NONE shall always be the first element.
         PUB_SUB, // Used in example publish subscriber.
-        OPEN_DOOR, // Used in example statemachine.
-        CLOSE_DOOR, // Used in example statemachine.
+        OPEN_DOOR, // Used in example state machine.
+        CLOSE_DOOR, // Used in example state machine.
         NO_OF_MSG_TYPES // Don't remove or rename. NO_OF_MSG_TYPES hall always be the last element.
     };
 } // Messages
 
-#endif //CPP_ACTORS_MESSAGETYPE_H
+#endif //CPP_ACTORS_MESSAGETYPES_H

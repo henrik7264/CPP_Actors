@@ -17,28 +17,23 @@
 
 #ifndef CPP_ACTORS_ACTOR_H
 #define CPP_ACTORS_ACTOR_H
-#include <cassert>
 #include <chrono>
-#include <memory>
 #include <mutex>
 #include <functional>
 #include <string>
-#include <list>
-#include <tuple>
 #include <rxcpp/rx.hpp>
-#include <utility>
+#include "Memory.h"
 #include "Logger.h"
-#include "Executor.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
 #include "Timer.h"
 #include "StateMachine.h"
 
-#define STATEMACHINE(...)  std::shared_ptr<StateMachines::StateMachine>(new StateMachines::StateMachine(actorMutex, __VA_ARGS__))
+#define STATEMACHINE(...) StateMachine_t(new StateMachines::StateMachine(Actor::actorMutex, __VA_ARGS__))
 #define STATE(...) new StateMachines::State(__VA_ARGS__)
-#define TIMER(...) new StateMachines::TimerTrans(__VA_ARGS__)
-#define MESSAGE(...) new StateMachines::MessageTrans(__VA_ARGS__)
+#define TIMER(...) new StateMachines::TimerTransition(__VA_ARGS__)
+#define MESSAGE(...) new StateMachines::MessageTransition(__VA_ARGS__)
 #define NEXT_STATE(nextState) StateMachines::NextState(nextState)
 
 using namespace Messages;
@@ -46,41 +41,56 @@ using namespace Messages;
 
 namespace Actors
 {
+    typedef Dispatchers::Function_t DispatcherFunction_t;
+    typedef Dispatchers::FuncId_t SubscriptionId_t;
+    typedef Schedulers::Function_t SchedulerFunction_t;
+    typedef Schedulers::JobId_t JobId_t;
     typedef std::shared_ptr<Timers::Timer> Timer_t;
     typedef std::shared_ptr<StateMachines::StateMachine> StateMachine_t;
 
     class Message
     {
     private:
-        std::list<std::pair<MessageType, std::function<void(Message_ptr)>>> subscriptions;
+        bool& markedForDeletion;
         std::mutex& actorMutex;
 
+    protected:
+        std::mutex subscriptionsMutex;
+        std::map<SubscriptionId_t, Message_t> subscriptions;
+
     public:
-        explicit Message(std::mutex& mutex): actorMutex(mutex) {}
-        virtual ~Message() {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            for (const auto& subscription: subscriptions)
-                Dispatchers::Dispatcher::getInstance().unsubscribe(subscription.first, subscription.second);
+        explicit Message(bool& markedForDeletion, std::mutex& actorMutex): markedForDeletion(markedForDeletion), actorMutex(actorMutex) {};
+        virtual ~Message() = default;
+
+        SubscriptionId_t subscribe(Message_t type, const DispatcherFunction_t& func) {
+            std::unique_lock<std::mutex> lock(subscriptionsMutex);
+            for (const auto& sub: subscriptions)
+                assert(sub.second != type);
+            auto fn = [this, func](const Message_ptr& msg){
+                std::unique_lock<std::mutex> lock(actorMutex);
+                if (!markedForDeletion)
+                    func(msg);};
+            auto subId = Dispatchers::Dispatcher::getInstance().registerCB(fn, type);
+            subscriptions[subId] = type;
+            return subId;
         }
 
-        void subscribe(MessageType type, const std::function<void(Message_ptr)>& func) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            for (const auto& subscription: subscriptions)
-                assert(subscription.first != type);
-            subscriptions.emplace_back(type, func);
-            Dispatchers::Dispatcher::getInstance().subscribe(type, [=](const Message_ptr& msg){
-                std::unique_lock<std::mutex> lock(actorMutex);
-                func(msg);
-            });
+        void unsubscribe(const SubscriptionId_t subId) {
+            std::unique_lock<std::mutex> lock(subscriptionsMutex);
+            auto type = subscriptions[subId];
+            Dispatchers::Dispatcher::getInstance().unregisterCB(subId, type);
+            subscriptions.erase(subId);
+        }
+
+        static void publish(const Message_ptr& msg_ptr) {
+            Dispatchers::Dispatcher::getInstance().publish(msg_ptr);
         }
 
         static void publish(Messages::Message* msg) {
-            auto msg_ptr = Message_ptr(msg);
-            Dispatchers::Dispatcher::getInstance().publish(msg_ptr);
-            StateMachines::SMDispatcher::getInstance().publish(msg_ptr);
+            publish(Message_ptr(msg));
         }
 
-        auto stream(MessageType type) {
+        auto stream(Message_t type) {
             auto observable = rxcpp::observable<>::create<Message_ptr> (
                 [=](const rxcpp::subscriber<Message_ptr>& subscriber) {
                     Message::subscribe(type, [=](const Message_ptr& msg) {subscriber.on_next(msg);});
@@ -93,82 +103,59 @@ namespace Actors
     class Scheduler
     {
     private:
-        std::list<Schedulers::JobId> scheduledJobs;
+        bool& markedForDeletion;
         std::mutex& actorMutex;
 
+    protected:
+        std::mutex scheduledJobsMutex;
+        std::list<JobId_t> scheduledJobs;
+
     public:
-        explicit Scheduler(std::mutex& mutex): actorMutex(mutex) {};
-        virtual ~Scheduler() {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            for (auto jobId : scheduledJobs)
-                Schedulers::Scheduler::getInstance().removeJob(jobId);
-        };
+        explicit Scheduler(bool& markedForDeletion, std::mutex& actorMutex): markedForDeletion(markedForDeletion), actorMutex(actorMutex) {};
+        virtual ~Scheduler() = default;
 
-        Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
+        JobId_t once(std::chrono::duration<long, std::milli> msec, const SchedulerFunction_t& func) {
+            std::unique_lock<std::mutex> lock(scheduledJobsMutex);
+            auto jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            });
-            scheduledJobs.push_back(id); // Used by destructor to remove jobs
-            return id;
+                if (!markedForDeletion)
+                    func();});
+            scheduledJobs.push_back(jobId); // Used by destructor to remove subscriptions
+            return jobId;
         }
 
-        Schedulers::JobId once(long msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            Schedulers::JobId id = Schedulers::Scheduler::getInstance().onceIn(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            });
-            scheduledJobs.push_back(id); // Used by destructor to remove jobs
-            return id;
+        JobId_t once(long msec, const SchedulerFunction_t& func) {
+            return once(std::chrono::duration<long, std::milli>(msec), func);
         }
 
-        Schedulers::JobId repeat(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
+        JobId_t repeat(std::chrono::duration<long, std::milli> msec, const SchedulerFunction_t& func) {
+            std::unique_lock<std::mutex> lock(scheduledJobsMutex);
+            auto jobId = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
                 std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            });
-            scheduledJobs.push_back(id); // Used by destructor to remove jobs
-            return id;
+                if (!markedForDeletion)
+                    func();});
+            scheduledJobs.push_back(jobId); // Used by destructor to remove subscriptions
+            return jobId;
         }
 
-        Schedulers::JobId repeat(long msec, const std::function<void()>& func) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            Schedulers::JobId id = Schedulers::Scheduler::getInstance().repeatEvery(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            });
-            scheduledJobs.push_back(id); // Used by destructor to remove jobs
-            return id;
+        JobId_t repeat(long msec, const SchedulerFunction_t& func) {
+            return repeat(std::chrono::duration<long, std::milli>(msec), func);
         }
 
-        void remove(Schedulers::JobId id) {
-            std::unique_lock<std::mutex> lock(actorMutex);
-            Schedulers::Scheduler::getInstance().removeJob(id);
-            scheduledJobs.remove(id); // Used by destructor to remove jobs
+        void remove(JobId_t jobId) {
+            std::unique_lock<std::mutex> lock(scheduledJobsMutex);
+            Schedulers::Scheduler::getInstance().removeJob(jobId);
+            scheduledJobs.remove(jobId); // Used by destructor to remove subscriptions
+        }
+
+        Timer_t timer(std::chrono::duration<long, std::milli> msec, const SchedulerFunction_t& func) {
+            return Timer_t(new Timers::Timer(actorMutex, msec, func));
+        }
+
+        Timer_t timer(long msec, const SchedulerFunction_t& func) {
+            return Timer_t (new Timers::Timer(actorMutex, msec, func));
         }
     }; // Scheduler
-
-
-    class Timer
-    {
-    private:
-        std::mutex& actorMutex;
-
-    public:
-        explicit Timer(std::mutex& mutex): actorMutex(mutex) {};
-        virtual ~Timer() = default;
-
-        Timer_t getInstance(long msec, const std::function<void()>& func) {
-            return std::make_shared<Timers::Timer>(msec, [this, func](){
-                std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            });
-        }
-    }; // Timer
-
 
     class Logger
     {
@@ -187,17 +174,36 @@ namespace Actors
     }; // Logger
 
 
-    class Actor: public Message, public Scheduler, public Timer, public Logger
+    class Actor: public MemoryManagement::Memory, public Message, public Scheduler, public Logger
     {
     protected:
+        bool markedForDeletion = false;
         std::mutex actorMutex;
+        std::string actorName;
 
     public:
-        explicit Actor(const std::string& name): Message(actorMutex), Scheduler(actorMutex), Timer(actorMutex), Logger(name) {}
-        ~Actor() override = default;
+        explicit Actor(const std::string& name): Message(markedForDeletion, actorMutex), Scheduler(markedForDeletion,actorMutex), Logger(name), markedForDeletion(false), actorName(name) {}
 
-        static void stopActors() {Executors::Executor::getInstance().stopExecutor();}
+        ~Actor() override {
+            markedForDeletion = true;
+
+            std::unique_lock<std::mutex> scheduledJobsLock(scheduledJobsMutex);
+            for (const auto jobId: scheduledJobs)
+                Schedulers::Scheduler::getInstance().removeJob(jobId);
+            scheduledJobs.clear();
+
+            std::unique_lock<std::mutex> subscriptionsLock(subscriptionsMutex);
+            for (const auto& sub: subscriptions)
+                Dispatchers::Dispatcher::getInstance().unregisterCB(sub.first, sub.second);
+            subscriptions.clear();
+
+            std::unique_lock<std::mutex> lock(actorMutex);
+        }
     }; // Actor
 } // Actors
 
 #endif //CPP_ACTORS_ACTOR_H
+
+//auto t1 = std::chrono::steady_clock::now();
+//auto t2 = std::chrono::steady_clock::now();
+//printf("~Actor %s, Micro seconds: %ld\n", actorName.c_str(), std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count());

@@ -9,7 +9,7 @@ It's a proof of concept version that provides the basic Actors functionality
 and most of the features discussed below. The library has been tested informally on a
 
 * Portable PC (i7-9750H CPU, Ubuntu 22.04, g++ v11.3.0)
-* High end PC (i9-12900k CPU, Fedora 38, g++ v??)
+* High end PC (i9-12900k CPU, Fedora 39, g++ v13.2.1)
 
 ## Idea
 The idea with this library is to create a framework for creating highly performant, scalable and maintainable code.
@@ -226,23 +226,24 @@ namespace Messages
 ```
 
 #### Operations on messages
-There are two operations which can be applied on messages: This is to subscribe to a message and to publish a message.
+There are three operations which can be applied on messages: This is to subscribe, unsubscribe and publish a message.
 
 #### Subscribe to a Message
-An Actor subscribes to a specific message type by providing a callback function
-that is executed each time a message of that type is published.
+An Actor subscribes to a specific message type by providing a callback function. This function is
+executed each time a message of that type is published.
 
 ##### The 'subscribe' function
 ```cpp
-void subscribe(MessageType type, const std::function<void(Message_ptr)>& func)
+Subscription_t subId = subscribe(MessageType type, const std::function<void(Message_ptr)>& func)
 
 // type: A specified message type. The available messages types are defined in MessageType.h
 // func: A lambda or callback function. The function must take Message_ptr as argument.
+// returns: A subscription id (unsigned long)
 ```
 
 ##### Example
 ```cpp
-Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg){
+Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg) {
     auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
     Logger::debug() << dataMsg;
 });
@@ -259,14 +260,42 @@ void cbFunc(const Message_ptr& msg) {
 }
 ```
 
+#### Unsubscribe to a Message
+An Actor can at any time unsubscribe a subscription. 
+
+
+##### The 'subscribe' function
+```cpp
+void unsubscribe(Subscription_t subId)
+
+// subId: the returned value of a subscription.
+```
+
+##### Example
+```cpp
+subscription_t subId = Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg) {
+    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+    Logger::debug() << dataMsg;
+});
+
+//...
+
+Message::unsubscribe(subId);
+```
+
+
 #### Publish a Message
 An Actor publishes messages by means of the publish function.
 
 ##### The 'publish' function
 ```cpp
 void publish(Messages::Message* msg)
-
 // msg: The message (instance of a class) to be published.
+ 
+or
+
+void publish(const Message_ptr& msg_ptr)
+// msg_ptr: The message wrapped into a shared_ptr to be published.
 ```
 
 ##### Example
@@ -279,8 +308,6 @@ The Actor starts by subscribing to a number of messages (message types).
 A callback function is associated to each subscription.
 Each time a message is published the set of callback functions that have subscribed to the message will be executed.
 This takes place in the Dispatcher where a number of Worker threads will take care of the execution.
-It is actually the Executor class that takes care of the execution of the function.
-It is a helper class/function to the Dispatcher.
 
 <p align="center">
   <img src="https://github.com/henrik7264/Actors/blob/main/images/Actors_Publish_Subscribe.png"><br>
@@ -293,8 +320,9 @@ There are some problems related to this execution model/architecture:
    only one callback function per Actor to be executed at a time, i.e. 100 Actors can concurrently execute 100 callback functions,
    but one Actor can only execute one callback function at a time.
 2. A heavy message load may create the situation described in item 1. To accommodate for this problem,
-   the Actors library will adapt the number of Workers to the message load, i.e. another Worker will be added to the Dispatcher
-   if the messages cannot be handled as fast as they arrive. This can in worse case lead to a large amount Workers (threads).
+   the Actors library makes use of a number of threads. Each message type is assigned to a dedicated queue and execution thread.
+
+      if the messages cannot be handled as fast as they arrive. This can in worse case lead to a large amount Workers (threads).
 
 The problems described above are common for this kind of architecture.
 There is no real solution to the problem except that the architect and programmer must ensure
@@ -340,7 +368,7 @@ namespace Actors
 
 #### Initialisation of Actors
 Initialization of an Actor consist of creating an instance of it. It can be done from anywhere and at any time -
-even an Actor may create new Actors. The instance of an Actor must exists throughout the lifetime of the application.
+even an Actor may create new Actors.
 
 ```cpp
 int main()
@@ -350,9 +378,6 @@ int main()
 
     // Let the program run for 10 sec. Replace this code with your own.
     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-
-    // Stop execution of the Actors.
-    Actors::Actor::stopActors();
     return 0;
 }
 ```
@@ -395,13 +420,13 @@ Logger::critical(...)
 Scheduler::once(...)
 Scheduler::repeat(...)
 Scheduler::remove(...)
+Scheduler::timer(...)
 
-Timer_t t1 = Timer::getInstance(...)
 Statemachine_t sm = STATEMACHINE(...)
 ```
 
 Observe how the functions are organized into logical groups. This makes it very easy to understand and use them.
-Only Timer and Statemachine are a bit different due to their nature.
+Only Statemachines are a bit different due to their nature.
 
 ### Logging
 Logging is fundamentally a debugging facility that allows the programmer to printout information
@@ -432,20 +457,15 @@ This will produce the following log entry:
 ### Scheduler
 A Scheduler can be used to execute a task (function call) at a given time.
 The task can be executed once or repeated until it is removed.
-The scheduled tasks are executed by an adaptable number of Workers.
-If the Workers are not able to execute the tasks as requested by the scheduler
-additional Workers will be started. This situation happens when many tasks are scheduled at the same time.
-The situation is not different from handling messages (see above section) - in fact it is exactly the same,
-and the Actors library will behave the same way:
+A special case of the scheduler is the timer which can be started and stopped after an instance has been created.
+The scheduled tasks are executed by one Worker. The Scheduler is closely related to message handling - 
+in fact they work in the same way and the Actors library will behave the same way:
 
 1. While executing one task another task may be triggered by a scheduler timeout.
    This could in worse case lead to thread synchronization problems.
    The Actors library solves this problem by allowing only one task per Actor to execute at a time,
    i.e. 100 Actors can concurrently execute 100 tasks, but one Actor can only execute one task at a time.
-2. A heavy scheduler load may create the situation described in item 1. To accommodate for this problem,
-   the Actors library will adapt the number of Workers, i.e. another Worker will be added
-   if the tasks cannot be handled as fast as they are triggered. This can in worse case lead to a large amount Workers (threads).
-3. Scheduled tasks and message handling works under the same principles as described above.
+2. Scheduled tasks and message handling works under the same principles as described above.
    Only one task/callback function can be executed at time per Actor to avoid synchronization problems.
 
 Again, the Actors library will do what it can to solve the load problems,
@@ -523,20 +543,29 @@ A timer can at anytime be stopped or restarted if needed. The timer has a timeou
 The timer is activated when it is started, and when it times out the callback function will be executed.
 
 #### Create a timer
-A timer is created by calling the timer function of the Actor.
+A timer is created by calling the timer function of the scheduler.
 It takes a timeout time and a callback function as argument.
 The Timer is activated at the moment it is started.
 
 ```cpp
-Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+Timer_t timer(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
+Timer_t timer(long msec, const std::function<void()>& func)
+
+// msec: timeout in milliseconds.
+// func: call back function to be executed when the job times out.
+// return: Timer_t - an instance of a Timer_t which is a shared_ptr that will be auto deleted when the instance no longer is reachable.
+```
+##### Example
+```cpp
+Timer_t t1 = scheduler::timer(1000, [this]() { // A new timer is created.
     logger::debug << "Timer t1 timed out!"
 }
 //...
-t1.start()  // Start the timer. It will timeout 1000ms from this moment.
+t1->start()  // Start the timer. It will timeout 1000ms from this moment.
 //...
-t1.stop()  // Stop the timer.
+t1->stop()  // Stop the timer.
 // ...
-t1.start() // Restart the timer.  It will timeout 1000ms from this moment.
+t1->start() // Restart the timer.  It will timeout 1000ms from this moment.
 ```
 
 #### Start a timer
@@ -550,7 +579,7 @@ void start()
 
 ##### Example
 ```cpp
-Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+Timer_t t1 = scheduler::timer(1000, [this]() { // A new timer is created.
     logger::debug << "Timer t1 timed out!"
 }
 //...
@@ -568,7 +597,7 @@ void stop()
 
 ##### Example
 ```cpp
-Timer_t t1 = Timer::getInstance(1000, [this]() { // A new timer is created.
+Timer_t t1 = scheduler::timer(1000, [this]() { // A new timer is created.
     logger::debug << "Timer t1 timed out!"
 }
 //...
@@ -594,10 +623,10 @@ A general template for a state machine is shown here:
 
 ```cpp
 Statemachine_t sm = STATEMACHINE(initial_state,
-                        STATE(state1, ...),
-                        STATE(state2, ...)
-                        ...
-                        STATE(stateN, ...))
+            STATE(state1, ...),
+            STATE(state2, ...)
+            ...
+            STATE(stateN, ...))
 ```
 
 It takes as argument an initial state and a number of states. Each state is identified by a unique state id.
@@ -609,26 +638,26 @@ The following example shows the definition of a state machine of a door.
 The door can be in state DOOR_CLOSED or DOOR_OPENED. The door is initially in state DOOR_CLOSED.
 
 ```cpp
-enum States {DOOR_OPENED, DOOR_CLOSED};
-StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
-                                 STATE(DOOR_CLOSED, ...),
-                                 STATE(DOOR_OPENED, ...));
+enum State {DOOR_OPENED, DOOR_CLOSED};
+StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
+             STATE(State::DOOR_CLOSED, ...),
+             STATE(State::DOOR_OPENED, ...));
 ```
 
 #### Creating a State
 A State is defined by its id and a number of transitions that each is triggered by an event.
 
 ```cpp
-enum States {STATE_A, STATE_N};
+enum State {STATE_A, STATE_N};
 StateMachine_t sm = STATEMACHINE(STATE_A,
-                                 STATE(STATE_A,
-                                       TRANSITION(...),
-                                       ...
-                                       TRANSITION(...)),
-                                 STATE(STATE_N, ...)
-                                       TRANSITION(...),
-                                       ...
-                                       TRANSITION(...)));
+             STATE(Starte::STATE_A,
+                   TRANSITION(...),
+                   ...
+                   TRANSITION(...)),
+             STATE(State::STATE_N, ...)
+                   TRANSITION(...),
+                   ...
+                   TRANSITION(...)));
 ```
 
 Two types of transitions can be used. That is the MESSAGE transition
@@ -638,13 +667,13 @@ that is triggered by a timer timeout.
 #### Example
 
 ```cpp
-enum States {DOOR_OPENED, DOOR_CLOSED};
+enum State {DOOR_OPENED, DOOR_CLOSED};
 StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
-                                 STATE(DOOR_CLOSED,
-                                       MESSAGE(MessageType::OPEN_DOOR, ...)),
-                                 STATE(DOOR_OPENED,
-                                        MESSAGE(MessageType::CLOSE_DOOR, ...),
-                                        TIMER(1000, ...)));
+             STATE(State::DOOR_CLOSED,
+                   MESSAGE(MessageType_t::OPEN_DOOR, ...)),
+             STATE(State::DOOR_OPENED,
+                    MESSAGE(MessageType_t::CLOSE_DOOR, ...),
+                    TIMER(1000, ...)));
 ```
 
 #### Creating a Transition
@@ -654,16 +683,16 @@ A transition is triggered by an event. When it is triggered it will perform an a
 and finally it will change to a new/next state (optional).
 
 ```cpp
-enum States {DOOR_OPENED, DOOR_CLOSED};
-StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
-                         STATE(DOOR_CLOSED,
-                               MESSAGE(MessageType::OPEN_DOOR, NEXT_STATE(DOOR_OPENED), [this](const Message_ptr& msg){
-                                   Logger::debug() << "Opening door ...";})),
-                         STATE(DOOR_OPENED,
-                               MESSAGE(MessageType::CLOSE_DOOR, NEXT_STATE(DOOR_CLOSED), [this](const Message_ptr& msg){
-                                   Logger::debug() << "Closing door ...";}),
-                               TIMER(1000, NEXT_STATE(DOOR_CLOSED), [this](){
-                                   Logger::debug() << "Auto closing door ...";})));
+enum State {DOOR_OPENED, DOOR_CLOSED};
+StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
+             STATE(State::DOOR_CLOSED,
+                   MESSAGE(MessageType_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](const Message_ptr& msg){
+                       Logger::debug() << "Opening door ...";})),
+             STATE(State::DOOR_OPENED,
+                   MESSAGE(MessageType_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](const Message_ptr& msg){
+                       Logger::debug() << "Closing door ...";}),
+                   TIMER(1000, NEXT_STATE(State::DOOR_CLOSED), [this](){
+                       Logger::debug() << "Auto closing door ...";})));
 
 ```
 
@@ -676,10 +705,10 @@ Observe that both the action and next_state are optional.
 
 #### Observations related to State Machines
 
-The state machine is tricky construction, but care has been taken to make it simple and safe to use:
+The state machine is a bit tricky, but care has been taken to make it simple and safe to use:
 
 1. A state machine is tightly coupled to an Actor. In fact, the state machine can not be used outside the scope of an Actor.
-2. A transition is an atomic operation, but with some restrictions. It works as follows:
+2. A transition is an "atomic" operation, but with some restrictions. It works as follows:
     1. A message is published by an Actor.
     2. The state machine will check if it has a transition that is triggered by the message event.
     3. If this is the case, the state machine will be locked until the transition has been executed.

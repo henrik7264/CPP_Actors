@@ -25,14 +25,14 @@ namespace Messages
 {
     struct OpenDoorMsg: public Message
     {
-        OpenDoorMsg(): Message(MessageType::OPEN_DOOR) {}
+        OpenDoorMsg(): Message(Message_t::OPEN_DOOR) {}
         ~OpenDoorMsg() override = default;
     }; // OpenDoorMsg
 
 
     struct CloseDoorMsg: public Message
     {
-        CloseDoorMsg(): Message(MessageType::CLOSE_DOOR) {}
+        CloseDoorMsg(): Message(Message_t::CLOSE_DOOR) {}
         ~CloseDoorMsg() override = default;
     }; // CloseDoorMsg
 } // Messages

@@ -23,8 +23,10 @@
 #include <mutex>
 #include <list>
 #include <map>
+#include <utility>
+#include "Memory.h"
 #include "Message.h"
-#include "Executor.h"
+#include "Dispatcher.h"
 #include "Scheduler.h"
 
 using namespace Messages;
@@ -32,8 +34,11 @@ using namespace Messages;
 
 namespace StateMachines
 {
+    typedef Dispatchers::Function_t DispatcherFunction_t;
+    typedef Dispatchers::FuncId_t SubscriptionId_t;
+    typedef Schedulers::Function_t SchedulerFunction_t;
+    typedef Schedulers::JobId_t JobId_t;
     const static long UNDEFINED_STATE = -1;
-    class StateMachine;
 
     struct LongWrapper {
         long value;
@@ -45,26 +50,7 @@ namespace StateMachines
     typedef LongWrapper NextState;
     typedef LongWrapper Initial_State;
 
-
-    class SMDispatcher
-    {
-    private:
-        std::mutex smdMutex;
-        std::map<MessageType, std::list<StateMachine*>> stateMachinesMap;
-
-        SMDispatcher() = default;
-        virtual ~SMDispatcher() = default;
-
-    public:
-        static SMDispatcher& getInstance() {
-            static SMDispatcher MySMDispatcher;
-            return MySMDispatcher;
-        }
-
-        void unregisterSM(StateMachine* stateMachine);
-        void registerSM(StateMachine* stateMachine);
-        void publish(const Message_ptr& message);
-    }; // SMDispatcher
+    class StateMachine;
 
 
     enum VarArgType {STATE_VA, TIMER_VA, MESSAGE_VA};
@@ -77,7 +63,7 @@ namespace StateMachines
         explicit VarArg(VarArgType type): varArgType(type) {}
         virtual ~VarArg() = default;
 
-        VarArgType getVarArcType() const {return varArgType;}
+        inline VarArgType getVarArcType() const {return varArgType;}
     };
 
 
@@ -95,48 +81,48 @@ namespace StateMachines
     }; // Transition
 
 
-    class MessageTrans: public Transition
+    class MessageTransition: public MemoryManagement::Memory, public Transition
     {
     private:
-        MessageType msgType;
-        std::function<void(Message_ptr)> action;
+        Message_t msgType;
+        DispatcherFunction_t action;
 
     public:
-        MessageTrans(MessageType msgType, const NextState& nextState): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action([](const Message_ptr& msg){/* do nothing */}) {}
-        MessageTrans(MessageType msgType, const std::function<void(Message_ptr)>& func): Transition(VarArgType::MESSAGE_VA, NextState(UNDEFINED_STATE)), msgType(msgType), action(func) {}
-        MessageTrans(MessageType msgType, const NextState& nextState, const std::function<void(Message_ptr)>& func): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action(func) {}
-        ~MessageTrans() override = default;
+        MessageTransition(Message_t msgType, NextState nextState): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action([](const Message_ptr& msg){/* do nothing */}) {}
+        MessageTransition(Message_t msgType, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, NextState(UNDEFINED_STATE)), msgType(msgType), action(std::move(func)) {}
+        MessageTransition(Message_t msgType, NextState nextState, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action(std::move(func)) {}
+        ~MessageTransition() override = default;
 
-        MessageType getMsgType() const {return msgType;}
-        void update(const Message_ptr& msg);
-    }; // Trans_Message
+        inline Message_t getMsgType() const {return msgType;}
+        void doAction(const Message_ptr& msg);
+    }; // MessageTransition
 
 
-    class TimerTrans: public  Transition
+    class TimerTransition: public MemoryManagement::Memory, public  Transition
     {
     private:
         Timeout timeout;
-        std::function<void()> action;
+        SchedulerFunction_t action;
 
     public:
-        TimerTrans(const Timeout& timeout, const NextState& nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
-        TimerTrans(const Timeout& timeout, const std::function<void()>& func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(func) {}
-        TimerTrans(const Timeout& timeout, const NextState& nextState, const std::function<void()>& func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(func) {}
-        TimerTrans(long timeout, const NextState& nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
-        TimerTrans(long timeout, const std::function<void()>& func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(func) {}
-        TimerTrans(long timeout, const NextState& nextState, const std::function<void()>& func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(func) {}
-        ~TimerTrans() override = default;
+        TimerTransition(const Timeout& timeout, NextState nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
+        TimerTransition(const Timeout& timeout, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(std::move(func)) {}
+        TimerTransition(const Timeout& timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(std::move(func)) {}
+        TimerTransition(long timeout, NextState nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
+        TimerTransition(long timeout, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(std::move(func)) {}
+        TimerTransition(long timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(std::move(func)) {}
+        ~TimerTransition() override = default;
 
-        Timeout getTimeout() const {return timeout;}
-        void update();
-    }; // Transition_Timeout
+        inline Timeout getTimeout() const {return timeout;}
+        void doAction();
+    }; // TimerTransition
 
 
-    class State: public VarArg
+    class State: public MemoryManagement::Memory, public VarArg
     {
     private:
         StateId stateId;
-        std::list<VarArg*> args; // List of events
+        std::list<VarArg*> args; // List of transitions
 
     public:
         template<typename ... Transitions>
@@ -154,149 +140,107 @@ namespace StateMachines
         }
 
         void setStateMachine(StateMachine* stateMachine) {
-            for(auto arg: args) {
+            for (auto arg: args) {
                 auto trans = dynamic_cast<Transition*>(arg);
                 trans->setStateMachine(stateMachine);
             }
         }
 
-        StateId getStateId() const {return stateId;}
-
-        const std::list<VarArg*>& getArgs() const {return args;}
-
-        void update(const Message_ptr& msg) {
-            for (auto arg: args) {
-                if (arg->getVarArcType() == VarArgType::MESSAGE_VA) {
-                    auto message = dynamic_cast<MessageTrans*>(arg);
-                    if (message->getMsgType() == msg->getMsgType())
-                        message->update(msg);
-                }
-            }
-        }
+        inline StateId getStateId() const {return stateId;}
+        inline const std::list<VarArg*>& getTransitions() const {return args;}
     }; // State
 
 
-    class StateMachine
+    class StateMachine: public MemoryManagement::Memory
     {
     private:
-        std::mutex smMutex;
+        bool markedForDeletion;
         std::mutex& actorMutex;
+        std::mutex mutex;
         StateId currState;
-        std::list<VarArg*> args;
-        std::list<Schedulers::JobId> jobIds;
+        std::list<VarArg*> args; // list of states
+        std::list<JobId_t> jobs;
+        std::list<std::pair<SubscriptionId_t, Message_t>> subscriptions;
 
     public:
         template<typename ... States>
-        explicit StateMachine(std::mutex& mutex, const Initial_State& initialState, States... states) : actorMutex(mutex), currState(initialState), args({states...}) {
-            jobIds.clear();
+        explicit StateMachine(std::mutex& actorMutex, const Initial_State& initialState,  States... states) : markedForDeletion(false), actorMutex(actorMutex), currState(initialState), args({states...}) {
+            jobs.clear();
+            subscriptions.clear();
             for (auto arg: args) {
                 assert(arg->getVarArcType() == VarArgType::STATE_VA);
-                auto state = dynamic_cast<State*>(arg);
+                auto* state = dynamic_cast<State*>(arg);
                 state->setStateMachine(this);
             }
             setCurrState(initialState);
-            SMDispatcher::getInstance().registerSM(this);
         }
 
         template<typename ... States>
-        explicit StateMachine(std::mutex& mutex, long initialState, States... states): StateMachine(mutex, Initial_State(initialState), states...) {}
+        explicit StateMachine(std::mutex& actorMutex, long initialState, States... states): StateMachine(actorMutex, Initial_State(initialState), states...) {}
 
         virtual ~StateMachine() {
-            std::unique_lock<std::mutex> lock(smMutex);
-            SMDispatcher::getInstance().unregisterSM(this);
-            for (auto jobId: jobIds)
-                Schedulers::Scheduler::getInstance().removeJob(jobId);
+            std::unique_lock<std::mutex> lock(mutex);
+            markedForDeletion = true;
+            for (auto job: jobs)
+                Schedulers::Scheduler::getInstance().removeJob(job);
+            jobs.clear();
+            for (auto subs: subscriptions)
+                Dispatchers::Dispatcher::getInstance().unregisterCB(subs.first, subs.second);
+            subscriptions.clear();
             for (auto arg: args)
                 delete arg;
         }
 
-        std::mutex& getSMMutex() {return smMutex;}
-        std::mutex& getActorMutex() {return actorMutex;}
-
-        const std::list<VarArg*>& getArgs() const {return args;}
-
-        StateId getCurrState() const {return currState;}
+        inline bool getMarkedForDeletion() const {return markedForDeletion;}
+        inline std::mutex& getActorMutex() {return actorMutex;}
 
         void setCurrState(const StateId& currentState) {
-            //std::unique_lock<std::actorMutex> lock(smMutex); // not needed is indirectly locked by the update.
-            for (auto jobId: jobIds)
-                Schedulers::Scheduler::getInstance().removeJob(jobId);
-            jobIds.clear();
-            currState = currentState;
-            for (auto arg: args) {
-                auto state = dynamic_cast<State*>(arg);
-                if (state->getStateId() == currState) {
-                    for (auto trans: state->getArgs()) {
-                        if (trans->getVarArcType() == VarArgType::TIMER_VA) {
-                            auto timer = dynamic_cast<TimerTrans*>(trans);
-                            jobIds.push_back(Schedulers::Scheduler::getInstance().onceIn(timer->getTimeout(),[timer]() { timer->update(); }));
+            std::unique_lock<std::mutex> lock(mutex);
+            if (!markedForDeletion) {
+                for (auto job: jobs)
+                    Schedulers::Scheduler::getInstance().removeJob(job);
+                jobs.clear();
+                for (auto subs: subscriptions)
+                    Dispatchers::Dispatcher::getInstance().unregisterCB(subs.first, subs.second);
+                subscriptions.clear();
+
+                currState = currentState;
+
+                for (auto arg: args) {
+                    auto* state = dynamic_cast<State*>(arg);
+                    if (state->getStateId() == currState) {
+                        for (auto* trans: state->getTransitions()) {
+                            if (trans->getVarArcType() == VarArgType::TIMER_VA) {
+                                auto* timerTrans = dynamic_cast<TimerTransition*>(trans);
+                                jobs.push_back(Schedulers::Scheduler::getInstance().onceIn(timerTrans->getTimeout(), [timerTrans] () {timerTrans->doAction();}));
+                            }
+                            if (trans->getVarArcType() == VarArgType::MESSAGE_VA) {
+                                auto* msgTrans = dynamic_cast<MessageTransition*>(trans);
+                                auto msgType = msgTrans->getMsgType();
+                                subscriptions.emplace_back(Dispatchers::Dispatcher::getInstance().registerCB([msgTrans](const Message_ptr& msg) {msgTrans->doAction(msg);}, msgType), msgType);
+                            }
                         }
                     }
                 }
             }
         }
-
-        void update(const Message_ptr& msg) {
-            if (smMutex.try_lock()) {
-                for (auto arg: args) {
-                    auto state = dynamic_cast<State *>(arg);
-                    if (currState == state->getStateId())
-                        state->update(msg);
-                }
-                smMutex.unlock();
-            }
-        }
     }; // StateMachine
 
-
-    void SMDispatcher::unregisterSM(StateMachine* stateMachine) {
-        std::unique_lock<std::mutex> lock(smdMutex);
-        for (auto& elem : stateMachinesMap) {
-            elem.second.remove_if([stateMachine](StateMachine* sm){ return sm == stateMachine;});
-            stateMachinesMap[elem.first] = elem.second;
-        }
-    }
-
-    void SMDispatcher::registerSM(StateMachine* stateMachine) {
-        std::unique_lock<std::mutex> lock(smdMutex);
-        if (stateMachine != nullptr) {
-            for (auto state_arg: stateMachine->getArgs()) {
-                auto state = dynamic_cast<State*>(state_arg);
-                for (auto trans: state->getArgs()) {
-                    if (trans->getVarArcType() == VarArgType::MESSAGE_VA) {
-                        auto message = dynamic_cast<MessageTrans*>(trans);
-                        std::list<StateMachine*> stateMachineList;
-                        if (stateMachinesMap.find(message->getMsgType()) != stateMachinesMap.end())
-                            stateMachineList = stateMachinesMap[message->getMsgType()];
-                        stateMachineList.push_back(stateMachine);
-                        stateMachinesMap[message->getMsgType()] = stateMachineList;
-                    }
-                }
-            }
-        }
-    }
-
-    void SMDispatcher::publish(const Message_ptr& message) {
-        std::unique_lock<std::mutex> lock(smdMutex);
-        if (stateMachinesMap.find(message->getMsgType()) != stateMachinesMap.end())
-            for (auto stateMachine: stateMachinesMap[message->getMsgType()])
-                Executors::Executor::getInstance().exec([stateMachine](const Message_ptr msg){stateMachine->update(msg);}, message);
-    }
-
-    void MessageTrans::update(const Message_ptr& msg) {
-        std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
-        action(msg);
-        if (nextState != UNDEFINED_STATE)
-            stateMachine->setCurrState(nextState);
-    }
-
-    void TimerTrans::update() {
-        if (stateMachine->getSMMutex().try_lock()) {
-            std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
-            action();
-            if (nextState != UNDEFINED_STATE)
+    void MessageTransition::doAction(const Message_ptr& msg) {
+        if (!stateMachine->getMarkedForDeletion()) {
+            {std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
+            action(msg);}
+            if (nextState!=UNDEFINED_STATE)
                 stateMachine->setCurrState(nextState);
-            stateMachine->getSMMutex().unlock();
+        }
+    }
+
+    void TimerTransition::doAction() {
+        if (!stateMachine->getMarkedForDeletion()) {
+            {std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
+            action();}
+            if (nextState!=UNDEFINED_STATE)
+                stateMachine->setCurrState(nextState);
         }
     }
 } // StateMachines

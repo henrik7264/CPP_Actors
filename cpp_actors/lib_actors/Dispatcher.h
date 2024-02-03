@@ -23,27 +23,90 @@
 #include <list>
 #include <thread>
 #include <mutex>
+#include <fstream>
+#include <iterator>
 #include "Queue.h"
 #include "Message.h"
-#include "Executor.h"
 
 using namespace Messages;
 
 
 namespace Dispatchers
 {
+    typedef std::function<void(Message_ptr)> Function_t;
+    typedef unsigned long FuncId_t;
+
+    class Worker
+    {
+    private:
+        bool doLoop = true;
+        std::thread trd;
+        Queues::Queue <std::pair<Function_t, Message_ptr>> jobQueue{std::make_pair(nullptr, nullptr)};
+
+        void run()
+        {
+            while (doLoop) {
+                auto job = jobQueue.get(100);
+                auto func = job.first;
+                auto msg = job.second;
+                if (doLoop && func)
+                    func(msg);
+            }
+        }
+
+        void stop() {
+            doLoop = false;
+            if (trd.joinable())
+                trd.join();
+        }
+
+    public:
+        Worker() { trd = std::thread([this]() { run(); }); }
+        virtual ~Worker() { stop(); }
+
+        inline Queues::Queue <std::pair<Function_t, Message_ptr>>& getQueue() { return jobQueue; }
+    }; // Worker
+
+
     class Dispatcher
     {
     private:
         std::mutex mutex;
-        std::list<std::function<void(Message_ptr)>> funcLists[MessageType::NO_OF_MSG_TYPES];
+        std::map<FuncId_t, Function_t> cbFuncs[Message_t::NO_OF_MSG_TYPES];
+        std::vector<Worker*> workers;
+        std::size_t noWorkers = 0;
 
-        Dispatcher() = default;
+        static unsigned int noOfCpus() {
+            unsigned int cores = std::thread::hardware_concurrency();
+            if (cores == 0) { // ref: https://github.com/awgn/speedcore
+                std::ifstream cpuinfo("/proc/cpuinfo");
+                cores = std::count(std::istream_iterator<std::string>(cpuinfo),std::istream_iterator<std::string>(),std::string("processor"));
+            }
+            if (cores == 0)
+                cores = 4;
+            return cores;
+        }
+
+        Dispatcher() {
+            for (unsigned int i = 0; i < noOfCpus(); i++)
+                workers.push_back(new Worker());
+            noWorkers = workers.size();
+        }
+
         virtual ~Dispatcher() {
             std::unique_lock<std::mutex> lock(mutex);
-            for (auto & funcList : funcLists)
-                funcList.clear();
+            for (auto* worker: workers)
+                delete worker;
+            workers.clear();
+            noWorkers = 0;
         };
+
+        bool areWorkerQueuesEmpty() {
+            for (auto* worker: workers)
+                if (!worker->getQueue().empty())
+                    return false;
+            return true;
+        }
 
     public:
         static Dispatcher& getInstance() {
@@ -51,24 +114,32 @@ namespace Dispatchers
             return MyDispatcher;
         }
 
-        void subscribe(MessageType type, const std::function<void(Message_ptr)>& func) {
-            assert(type != MessageType::NONE && type != MessageType::NO_OF_MSG_TYPES);
+        FuncId_t registerCB(const Function_t& func, Message_t type) {
+            assert(type != Message_t::NONE && type != Message_t::NO_OF_MSG_TYPES);
             std::unique_lock<std::mutex> lock(mutex);
-            funcLists[type].push_back(func);
+            auto funcId = reinterpret_cast<FuncId_t>(&func);
+            cbFuncs[type][funcId] = func;
+            return funcId;
         }
 
-        void unsubscribe(MessageType type, const std::function<void(Message_ptr)>& func) {
-            assert(type != MessageType::NONE && type != MessageType::NO_OF_MSG_TYPES);
+        void unregisterCB(const FuncId_t& funcId, Message_t type) {
             std::unique_lock<std::mutex> lock(mutex);
-            funcLists[type].remove_if([func](const std::function<void(Message_ptr)>& f){return f.target<std::function<void(Message_ptr)>>() == func.target<std::function<void(Message_ptr)>>();});
+            cbFuncs[type].erase(funcId);
         }
 
         void publish(const Message_ptr& msg) {
             std::unique_lock<std::mutex> lock(mutex);
-            for (const auto& func: funcLists[msg->getMsgType()])
-                Executors::Executor::getInstance().exec(func, msg);
+            if (noWorkers > 0) {
+                if (MemoryManagement::Memory::hasMarkedMem() && areWorkerQueuesEmpty())
+                    MemoryManagement::Memory::freeMarkedMem();
+                auto msgType = msg->getMsgType();
+                auto *worker= workers[msgType % noWorkers];
+                auto cbMap = cbFuncs[msgType];
+                for (auto it= cbMap.begin(); it != cbMap.end(); it++)
+                    worker->getQueue().push(std::make_pair(it->second, msg));
+            }
         }
     }; // Dispatcher
-} // Messages
+} // Dispatchers
 
 #endif //CPP_ACTORS_DISPATCHER_H

@@ -1,7 +1,10 @@
-cmake_minimum_required(VERSION 3.22)
-project(cpp_actors)
+cmake_minimum_required(VERSION 3.6)
+project(cpp_actors2)
 
 set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 include_directories(lib_messages lib_actors)
 

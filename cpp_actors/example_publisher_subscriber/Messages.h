@@ -31,7 +31,7 @@ namespace Messages
         std::string data;
 
     public:
-        explicit PubSubMsg(std::string  data): Message(MessageType::PUB_SUB), data(std::move(data)) {}
+        explicit PubSubMsg(std::string  data): Message(Message_t::PUB_SUB), data(std::move(data)) {}
         ~PubSubMsg() override = default;
 
         const std::string& getData() const {return data;}

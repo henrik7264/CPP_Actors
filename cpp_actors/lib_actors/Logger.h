@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 #ifndef CPP_ACTORS_LOGGER_H
 #define CPP_ACTORS_LOGGER_H
 #include <ctime>
@@ -24,6 +23,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <utility>
 
 
 namespace Loggers
@@ -34,7 +34,7 @@ namespace Loggers
         enum LogLevel {DEBUG, INFO, WARNING, ERROR, FATAL} logLevel;
         std::string loggerName;
 
-        explicit Logger(LogLevel level, const std::string& loggerName): logLevel(level), loggerName(loggerName) {};
+        explicit Logger(LogLevel level, std::string loggerName): logLevel(level), loggerName(std::move(loggerName)) {};
 
         static const char* loglevel2Txt(LogLevel level) {
             static const char* Levels[] = {"DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};

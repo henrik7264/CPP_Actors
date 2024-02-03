@@ -28,16 +28,16 @@ namespace Actors
     class SMachine: public Actor
     {
     private:
-        enum States {DOOR_OPENED, DOOR_CLOSED};
-        StateMachine_t sm = STATEMACHINE(DOOR_CLOSED,
-                                 STATE(DOOR_CLOSED,
-                                       MESSAGE(MessageType::OPEN_DOOR, NEXT_STATE(DOOR_OPENED), [this](const Message_ptr& msg){
-                                           Logger::debug() << "Opening door ...";})),
-                                 STATE(DOOR_OPENED,
-                                       MESSAGE(MessageType::CLOSE_DOOR, NEXT_STATE(DOOR_CLOSED), [this](const Message_ptr& msg){
-                                           Logger::debug() << "Closing door ...";}),
-                                       TIMER(1000, NEXT_STATE(DOOR_CLOSED), [this](){
-                                           Logger::debug() << "Auto closing door ...";})));
+        enum State {DOOR_OPENED, DOOR_CLOSED};
+        StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
+                STATE(State::DOOR_CLOSED,
+                      MESSAGE(Message_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](const Message_ptr& msg){
+                          Logger::debug() << "Opening door ...";})),
+                STATE(State::DOOR_OPENED,
+                      MESSAGE(Message_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](const Message_ptr& msg){
+                          Logger::debug() << "Closing door ...";}),
+                      TIMER(1000, NEXT_STATE(State::DOOR_CLOSED), [this](){
+                          Logger::debug() << "Auto closing door ...";})));
 
     public:
         SMachine(): Actor("SMACHINE") {}

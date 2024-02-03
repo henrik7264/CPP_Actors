@@ -19,13 +19,11 @@
 #include "Publisher.h"
 #include "Subscriber.h"
 
-
 int main()
 {
     // initialise all Actors
     auto actors = {PUBLISHER(), SUBSCRIBER()};
-    
+
     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-    Actors::Actor::stopActors();
     return 0;
 }
