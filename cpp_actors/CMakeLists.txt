@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.6)
-project(cpp_actors2)
+project(CPP_Actors)
 
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra")
