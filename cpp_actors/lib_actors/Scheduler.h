@@ -84,19 +84,18 @@ namespace Schedulers
         void run() {
             while (doLoop) {
                 std::unique_lock<std::mutex> lock(mutex);
-                if (doLoop && jobs.empty())
+                while (doLoop && jobs.empty())
                     jobAvailable.wait(lock);
-                else {
-                    auto nextTimeout = std::chrono::time_point<std::chrono::steady_clock>::max();
-                    for (auto job: jobs) {
-                        auto jobTimeout = std::get<1>(job.second);
-                        auto jobRepeatTimes = std::get<3>(job.second);
-                        if ((jobRepeatTimes > 0) && (jobTimeout < nextTimeout))
-                            nextTimeout = jobTimeout;
-                    }
-                    if (doLoop && (nextTimeout > std::chrono::steady_clock::now()))
-                        jobAvailable.wait_until(lock, nextTimeout);
+
+                auto nextTimeout = std::chrono::time_point<std::chrono::steady_clock>::max();
+                for (auto job: jobs) {
+                    auto jobTimeout = std::get<1>(job.second);
+                    auto jobRepeatTimes = std::get<3>(job.second);
+                    if ((jobRepeatTimes > 0) && (jobTimeout < nextTimeout))
+                        nextTimeout = jobTimeout;
                 }
+                if (doLoop && (nextTimeout > std::chrono::steady_clock::now()))
+                    jobAvailable.wait_until(lock, nextTimeout);
 
                 std::list<JobId_t> jobsToRemove;
                 auto currentTime = std::chrono::steady_clock::now();
@@ -109,9 +108,10 @@ namespace Schedulers
 
                     if (doLoop && (noWorkers > 0) && (jobRepeatTimes > 0) && (jobTimeout <= currentTime)) {
                         worker->getQueue().push(func);
-                        jobs[jobId] = std::make_tuple(func, jobTimeout + jobDuration, jobDuration, jobRepeatTimes-1);
                         if (jobRepeatTimes == 1)
                             jobsToRemove.push_back(jobId);
+                        else
+                            jobs[jobId] = std::make_tuple(func, jobTimeout + jobDuration, jobDuration, jobRepeatTimes-1);
                     }
                 }
                 for (auto jobId: jobsToRemove)
