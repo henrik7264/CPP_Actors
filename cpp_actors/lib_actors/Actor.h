@@ -203,7 +203,3 @@ namespace Actors
 } // Actors
 
 #endif //CPP_ACTORS_ACTOR_H
-
-//auto t1 = std::chrono::steady_clock::now();
-//auto t2 = std::chrono::steady_clock::now();
-//printf("~Actor %s, Micro seconds: %ld\n", actorName.c_str(), std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count());

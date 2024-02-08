@@ -70,6 +70,7 @@ namespace StateMachines
     class Transition: public VarArg
     {
     protected:
+        static std::mutex transition_lock;
         StateMachine* stateMachine;
         NextState nextState;
 
@@ -193,6 +194,7 @@ namespace StateMachines
 
         inline bool getMarkedForDeletion() const {return markedForDeletion;}
         inline std::mutex& getActorMutex() {return actorMutex;}
+        inline StateId& getCurrentState() {return currState;}
 
         void setCurrState(const StateId& currentState) {
             std::unique_lock<std::mutex> lock(mutex);
@@ -226,21 +228,31 @@ namespace StateMachines
         }
     }; // StateMachine
 
+    std::mutex Transition::transition_lock;
+
     void MessageTransition::doAction(const Message_ptr& msg) {
         if (!stateMachine->getMarkedForDeletion()) {
-            {std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
-            action(msg);}
-            if (nextState!=UNDEFINED_STATE)
-                stateMachine->setCurrState(nextState);
+            auto currState = stateMachine->getCurrentState();
+            std::unique_lock<std::mutex> lock(transition_lock);
+            if (currState == stateMachine->getCurrentState()) {
+                {std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
+                action(msg);}
+                if (nextState!=UNDEFINED_STATE)
+                    stateMachine->setCurrState(nextState);
+            }
         }
     }
 
     void TimerTransition::doAction() {
         if (!stateMachine->getMarkedForDeletion()) {
-            {std::unique_lock<std::mutex> lock(stateMachine->getActorMutex());
-            action();}
-            if (nextState!=UNDEFINED_STATE)
-                stateMachine->setCurrState(nextState);
+            auto currState = stateMachine->getCurrentState();
+            std::unique_lock<std::mutex> lock(transition_lock);
+            if (currState == stateMachine->getCurrentState()) {
+                {std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
+                action();}
+                if (nextState!=UNDEFINED_STATE)
+                    stateMachine->setCurrState(nextState);
+            }
         }
     }
 } // StateMachines
