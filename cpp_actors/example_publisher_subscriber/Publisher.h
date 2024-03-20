@@ -35,7 +35,7 @@ namespace Actors
     public:
         Publisher(): Actor("PUBLISHER") {
             Scheduler::repeat(1000, [this]() {
-                Message::publish(new PubSubMsg("Hello no. " + std::to_string(i++)));
+                Messenger::publish(new PubSubMsg("Hello no. " + std::to_string(i++)));
             });
         }
         ~Publisher() override {printf("PUBLISHER called %d times\n", i);};

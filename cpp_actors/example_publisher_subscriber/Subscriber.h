@@ -36,8 +36,8 @@ namespace Actors
     public:
         Subscriber() : Actor("SUBSCRIBER")
         {
-            Message::subscribe(Message_t::PUB_SUB, [this](const Message_ptr &msg) {
-                auto* pubSubMsg = dynamic_cast<PubSubMsg*>(msg.get());
+            Messenger::subscribe(Message_t::PUB_SUB, [this](Message* msg) {
+                auto* pubSubMsg = dynamic_cast<PubSubMsg*>(msg);
                 Logger::debug() << pubSubMsg;
                 i++;
             });

@@ -1,9 +1,11 @@
 # Reactive Systems using Actors
+
 Dear all,
 
 Welcome to Actors - a C++ library for creating Reactive Systems based on the Actors model.
 
 ## Status
+
 The library is currently a work in progress and may change without any notice.
 It's a proof of concept version that provides the basic Actors functionality 
 and most of the features discussed below. The library has been tested informally on a
@@ -12,6 +14,7 @@ and most of the features discussed below. The library has been tested informally
 * High end PC (i9-12900k CPU, Fedora 39, g++ v13.2.1)
 
 ## Idea
+
 The idea with this library is to create a framework for creating highly performant, scalable and maintainable code.
 My inspiration for this project originates from the following sources:
 
@@ -27,6 +30,7 @@ Although there are several references to ROS, the library has as such nothing to
 It is a general purpose library/framework for creating reactive systems using Actors.
 
 ## Approach
+
 I have always found the following items central for producing high quality software
 
 * Low coupling/high cohesion<br>
@@ -53,6 +57,7 @@ It is my hope that the above items are reflected in the code and especially the 
 and that the library provides a solid foundation for creating reactive systems based on Actors.
 
 ## Project phases
+
 I foresee at least two phases for the library. Phase1 is related to only adding features to the library. This includes:
 
 * Logging<br>Logging is one of the most fundamental debugging facilities a library like this must provide.
@@ -92,6 +97,7 @@ The second phase is only related to create a distributed system of Actors that c
 The progress of this library depends a lot on the interest for it and if the overall goals actually are met.
 
 ## Required software
+
 The Actors library depends on the following software:
 
 * C++ compiler (must support c++ standard 17)
@@ -99,6 +105,7 @@ The Actors library depends on the following software:
 * RxCPP v2 (see https://github.com/ReactiveX/RxCPP)
 
 ## Installation and setup
+
 The Actors library depends on the ReactiveX extensions RxCPP
 This extensions must be installed prior to installing the library.
 The installation process is as follows:
@@ -115,7 +122,7 @@ mkdir build
 cd build
 cmake ..
 sudo make install 
-``````
+```
 
 ### Installation of the Actors library on Linux
 
@@ -136,9 +143,11 @@ make
 ```
 
 ## Using the Actors library in your own project
+
 Now to the more fun part of using the Actors library.
 
 ### Project setup
+
 There is currently no installation packages for the Actors library.
 The code is simply indented to be included directly in your project.
 Copy the lib_actors, lib_messages and CMakeLists.txt folders directly
@@ -162,10 +171,11 @@ A number of examples are provided as part of the Actors library.
 They should provide enough information to setup your development environment.
 
 ## Features of the Actor library
-The following sections describe messages, actors, schedulers, timers and state machines.
-As the library expands new features will be added
+
+The following sections describe messages, actors, schedulers, timers and state machines. As the library expands new features will be added
 
 ### Messages
+
 Messages are one of the most important concepts of the Actors library.
 A message is simply a class, or more precisely a subclass of the Message class.
 The constructor of the Message class takes a MessageType as argument.
@@ -220,51 +230,56 @@ namespace Messages
         ~DataMsg() override = default;
 
         const std::string& getData() const {return data;}
-        friend std::ostream& operator<< (std::ostream& out, const DataMsg* msg)  {return out << msg->getData();}
+        friend std::ostream& operator<< (std::ostream& out, const DataMessage* msg)  {return out << msg->getData();}
     }; // DataMsg
 } // Messages
 ```
 
 #### Operations on messages
+
 There are three operations which can be applied on messages: This is to subscribe, unsubscribe and publish a message.
 
 #### Subscribe to a Message
+
 An Actor subscribes to a specific message type by providing a callback function. This function is
 executed each time a message of that type is published.
 
 ##### The 'subscribe' function
+
 ```cpp
-Subscription_t subId = subscribe(MessageType type, const std::function<void(Message_ptr)>& func)
+Subscription_t subId = subscribe(MessageType type, const std::function<void(Message*)>& func)
 
 // type: A specified message type. The available messages types are defined in MessageType.h
-// func: A lambda or callback function. The function must take Message_ptr as argument.
+// func: A lambda or callback function. The function must take tr as argument.
 // returns: A subscription id (unsigned long)
 ```
 
 ##### Example
+
 ```cpp
-Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg) {
-    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+Messenger::subscribe(MessageType::DATA_MSG, [this](Message* msg) {
+    auto* dataMsg = dynamic_cast<DataMessage*>(msg.get());
     Logger::debug() << dataMsg;
 });
 ```
 
-or 
+or
 
 ```cpp
-Message::subscribe(MessageType::PUB_SUB, std::bind(&Subscriber::cbFunc, this, std::placeholders::_1));
+Messenger::subscribe(MessageType::PUB_SUB, std::bind(&Subscriber::cbFunc, this, std::placeholders::_1));
 
-void cbFunc(const Message_ptr& msg) {
-    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+void cbFunc(Message* msg) {
+    auto* dataMsg = dynamic_cast<DataMessage*>(msg);
     Logger::debug() << dataMsg;
 }
 ```
 
 #### Unsubscribe to a Message
-An Actor can at any time unsubscribe a subscription. 
 
+An Actor can at any time unsubscribe a subscription.
 
-##### The 'subscribe' function
+##### The 'unsubscribe' function
+
 ```cpp
 void unsubscribe(Subscription_t subId)
 
@@ -272,35 +287,33 @@ void unsubscribe(Subscription_t subId)
 ```
 
 ##### Example
+
 ```cpp
-subscription_t subId = Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg) {
-    auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+subscription_t subId = Messenger::subscribe(MessageType::DATA_MSG, [this](const tr& msg) {
+    auto* dataMsg = dynamic_cast<DataMessage*>(msg.get());
     Logger::debug() << dataMsg;
 });
 
 //...
 
-Message::unsubscribe(subId);
+Messenger::unsubscribe(subId);
 ```
 
-
 #### Publish a Message
+
 An Actor publishes messages by means of the publish function.
 
 ##### The 'publish' function
-```cpp
-void publish(Messages::Message* msg)
-// msg: The message (instance of a class) to be published.
- 
-or
 
-void publish(const Message_ptr& msg_ptr)
-// msg_ptr: The message wrapped into a shared_ptr to be published.
-```
+```cpp
+void publish(Message* msg)
+// msg: The message (instance of a class) to be published.
+ ```
 
 ##### Example
+
 ```cpp
-Message::publish(new DataMsg("Hello wold."));
+Messenger::publish(new DataMsg("Hello wold."));
 ```
 
 The sequence diagram below shows how the subscription and publishing of messages work.
@@ -331,9 +344,11 @@ and that the callback functions are fast and responsive.
 Avoid sleep, wait and I/O operations in callback functions that are called often.
 
 ### Actors
+
 Actors are, like messages, a central part of the Actors library. All Actors are sub-classes of the Actor class:
 
 #### Creation of an Actor
+
 ```cpp
 namespace Actors
 {
@@ -350,14 +365,15 @@ It must be a unique name that is easy to identify in ex. log message.
 The following example shows how the MyActor subscribes to DATA_MSG messages:
 
 #### Creation of an Actor that subscribes to DATA_MSG messages
+
 ```cpp
 namespace Actors
 {
     struct MyActor: public Actor
     {
         MyActor(): Actor("MY_ACTOR") {
-            Message::subscribe(MessageType::DATA_MSG, [this](const Message_ptr& msg){
-                auto* dataMsg = dynamic_cast<DataMsg*>(msg.get());
+            Messenger::subscribe(MessageType::DATA_MSG, [this](Message* msg){
+                auto* dataMsg = dynamic_cast<DataMessage*>(msg);
                 Logger::debug() << dataMsg;
             });
         }
@@ -367,6 +383,7 @@ namespace Actors
 ```
 
 #### Initialisation of Actors
+
 Initialization of an Actor consist of creating an instance of it. It can be done from anywhere and at any time -
 even an Actor may create new Actors.
 
@@ -403,13 +420,15 @@ int main()
 ```
 
 #### Actors provided interfaces
+
 An Actor is implemented as a facade. As soon we are in the scope of an Actor a set of functions becomes available.
 This includes:
 
 ```cpp
-Message::scribe(...)
-Message::publish(...)
-Message::stream(...)
+Messenger::scribe(...)
+Messenger::unsucscribe(...)
+Messenger::publish(...)
+Messenger::stream(...)
 
 Logger::debug(...)
 Logger::info(...)
@@ -429,6 +448,7 @@ Observe how the functions are organized into logical groups. This makes it very 
 Only Statemachines are a bit different due to their nature.
 
 ### Logging
+
 Logging is fundamentally a debugging facility that allows the programmer to printout information
 about the Actors internal state. Five log levels are provided where each level indicates
 the severity of the problem. Each loglevel returns a reference to a logging object which
@@ -436,6 +456,7 @@ actually is a std::ostringstream. This means that the well-known C++ stream inse
 “<<” can be used to compose the logging messages. Log messages will in the end be streamed to std::clog.
 
 #### Logging Interface
+
 ```cpp
 Logger::debug() << "Here follows a stream of data separated by <<";
 Logger::info() << "Here follows a stream of data separated by <<";
@@ -445,6 +466,7 @@ Logger::fatal() << "Here follows a stream of data separated by <<";
 ```
 
 ### Example
+
 ```cpp
 Logger::info() << "Received a Data Message " << msg->getName();
 ```
@@ -455,6 +477,7 @@ This will produce the following log entry:
 ```
 
 ### Scheduler
+
 A Scheduler can be used to execute a task (function call) at a given time.
 The task can be executed once or repeated until it is removed.
 A special case of the scheduler is the timer which can be started and stopped after an instance has been created.
@@ -476,10 +499,12 @@ It is in these two areas the problem should be resolved.
 The scheduler interface is defined as follows:
 
 #### Schedule a task once
+
 A task can be executed once at a given time by the Scheduler.
 The once function will return a job id that can be used to cancel/remove the scheduled job.
 
 ##### The 'once' function
+
 ```cpp
 Schedulers::JobId once(std::chrono::duration<long, std::milli> msec, const std::function<void()>& func)
 Schedulers::JobId once(long msec, const std::function<void()>& func)
@@ -490,6 +515,7 @@ Schedulers::JobId once(long msec, const std::function<void()>& func)
 ```
 
 ##### Example
+
 ```cpp
 auto jobId = Scheduler::once(1000, [this]() { // A new job is scheduled.
     logger::debug << "Scheduled job timed out!";   
@@ -497,6 +523,7 @@ auto jobId = Scheduler::once(1000, [this]() { // A new job is scheduled.
 ```
 
 #### Schedule a repeating task
+
 A job can be scheduled to repeat a task.
 The repeat function will return a job id that can be used to cancel/remove the scheduled job.
 
@@ -512,6 +539,7 @@ Schedulers::JobId repeat(long msec, const std::function<void()>& func)
 ```
 
 ##### Example
+
 ```cpp
 auto jobId = Scheduler::repeat(1000, [this]() { // A new job is scheduled.
     logger::debug << "Scheduled job timed out!";   
@@ -519,9 +547,11 @@ auto jobId = Scheduler::repeat(1000, [this]() { // A new job is scheduled.
 ```
 
 #### Remove a scheduled job
+
 A scheduled job can at any time be canceled/removed.
 
 ##### The 'remove' function
+
 ```cpp
 void remove(Schedulers::JobId id)
 
@@ -529,6 +559,7 @@ void remove(Schedulers::JobId id)
 ```
 
 ##### Example
+
 ```cpp
 auto jobId = Scheduler::repeat(1000, [this]() { // A new job is scheduled.
     logger::debug << "Scheduled job timed out!"    
@@ -538,11 +569,13 @@ Scheduler::remove(jobId)  // The job is canceled and removed.
 ```
 
 ### Timers
+
 Timers are similar to schedulers, except a timer must be started before it is activated.
 A timer can at anytime be stopped or restarted if needed. The timer has a timeout and a callback function.
 The timer is activated when it is started, and when it times out the callback function will be executed.
 
 #### Create a timer
+
 A timer is created by calling the timer function of the scheduler.
 It takes a timeout time and a callback function as argument.
 The Timer is activated at the moment it is started.
@@ -555,7 +588,9 @@ Timer_t timer(long msec, const std::function<void()>& func)
 // func: call back function to be executed when the job times out.
 // return: Timer_t - an instance of a Timer_t which is a shared_ptr that will be auto deleted when the instance no longer is reachable.
 ```
+
 ##### Example
+
 ```cpp
 Timer_t t1 = scheduler::timer(1000, [this]() { // A new timer is created.
     logger::debug << "Timer t1 timed out!"
@@ -569,10 +604,12 @@ t1->start() // Restart the timer.  It will timeout 1000ms from this moment.
 ```
 
 #### Start a timer
+
 A Timer is activated at the moment it is started. 
 If needed it can at any time be restarted by calling the start function.
 
 ##### The 'start' function
+
 ```cpp
 void start()
 ```
@@ -587,15 +624,18 @@ t1.start()  // Start the timer. It will timeout 1000ms from this moment.
 ```
 
 #### Stop a timer
+
 A timer can at any time be stopped by calling the stop function.
 The stop function will inactivate the timer and preventing it from timing out.
 
 ##### The 'stop' function
+
 ```cpp
 void stop()
 ```
 
 ##### Example
+
 ```cpp
 Timer_t t1 = scheduler::timer(1000, [this]() { // A new timer is created.
     logger::debug << "Timer t1 timed out!"
@@ -607,6 +647,7 @@ t1.stop()  // Stop the timer.
 ```
 
 ### State Machines
+
 State machines comes in many forms and is always hard to understand.
 The state machine is in itself not that hard to understand:
 It can be in one of a number of states and it will initially be in a predefined state.
@@ -616,6 +657,7 @@ An state machine is in other words defined by list of states, an initial state,
 and the events that trigger the transitions.
 
 #### Creating a State Machine
+
 A state machine is created, not surprisingly, as an instance of a Statemachine. 
 To simplify the definition or writing of a state machine,
 macros named STATEMACHINE, STATE, MESSAGE, TIMER and NEXT_STATE have been defined.
@@ -634,6 +676,7 @@ It can be a number or enumeration. Use enumerations as shown in the example belo
 This is a nice way to define state ids.
 
 #### Example
+
 The following example shows the definition of a state machine of a door.
 The door can be in state DOOR_CLOSED or DOOR_OPENED. The door is initially in state DOOR_CLOSED.
 
@@ -645,6 +688,7 @@ StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
 ```
 
 #### Creating a State
+
 A State is defined by its id and a number of transitions that each is triggered by an event.
 
 ```cpp
@@ -686,10 +730,10 @@ and finally it will change to a new/next state (optional).
 enum State {DOOR_OPENED, DOOR_CLOSED};
 StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
              STATE(State::DOOR_CLOSED,
-                   MESSAGE(MessageType_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](const Message_ptr& msg){
+                   MESSAGE(MessageType_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](Message* msg){
                        Logger::debug() << "Opening door ...";})),
              STATE(State::DOOR_OPENED,
-                   MESSAGE(MessageType_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](const Message_ptr& msg){
+                   MESSAGE(MessageType_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](Message* msg){
                        Logger::debug() << "Closing door ...";}),
                    TIMER(1000, NEXT_STATE(State::DOOR_CLOSED), [this](){
                        Logger::debug() << "Auto closing door ...";})));

@@ -33,24 +33,29 @@ using namespace Messages;
 
 namespace Dispatchers
 {
-    typedef std::function<void(Message_ptr)> Function_t;
+    typedef std::function<void(Message*)> Function_t;
     typedef unsigned long FuncId_t;
+    static std::map<FuncId_t, Function_t> cbFuncs[Message_t::NO_OF_MSG_TYPES];
+    static std::mutex mutex;
 
     class Worker
     {
     private:
         bool doLoop = true;
         std::thread trd;
-        Queues::Queue <std::pair<Function_t, Message_ptr>> jobQueue{std::make_pair(nullptr, nullptr)};
+        Queues::Queue<Message*> jobQueue{nullptr};
 
         void run()
         {
             while (doLoop) {
-                auto job = jobQueue.get(100);
-                auto func = job.first;
-                auto msg = job.second;
-                if (doLoop && func)
-                    func(msg);
+                auto msg = jobQueue.get(100);
+                if (msg) { // msg is null if the queue times out.
+                    auto cbMap = cbFuncs[msg->getMsgType()];
+                    for (auto it = cbMap.begin(); it != cbMap.end(); it++)
+                        if (doLoop) 
+                            it->second(msg);
+                    delete msg;
+                }
             }
         }
 
@@ -64,24 +69,18 @@ namespace Dispatchers
         Worker() { trd = std::thread([this]() { run(); }); }
         virtual ~Worker() { stop(); }
 
-        inline Queues::Queue <std::pair<Function_t, Message_ptr>>& getQueue() { return jobQueue; }
+        inline Queues::Queue <Message*>& getQueue() { return jobQueue; }
     }; // Worker
 
 
     class Dispatcher
     {
     private:
-        std::mutex mutex;
-        std::map<FuncId_t, Function_t> cbFuncs[Message_t::NO_OF_MSG_TYPES];
         std::vector<Worker*> workers;
         std::size_t noWorkers = 0;
 
         static unsigned int noOfCpus() {
             unsigned int cores = std::thread::hardware_concurrency();
-            if (cores == 0) { // ref: https://github.com/awgn/speedcore
-                std::ifstream cpuinfo("/proc/cpuinfo");
-                cores = std::count(std::istream_iterator<std::string>(cpuinfo),std::istream_iterator<std::string>(),std::string("processor"));
-            }
             if (cores == 0)
                 cores = 4;
             return cores;
@@ -127,16 +126,14 @@ namespace Dispatchers
             cbFuncs[type].erase(funcId);
         }
 
-        void publish(const Message_ptr& msg) {
+        void publish(Message* msg) {
             std::unique_lock<std::mutex> lock(mutex);
             if (noWorkers > 0) {
                 if (MemoryManagement::Memory::hasMarkedMem() && areWorkerQueuesEmpty())
                     MemoryManagement::Memory::freeMarkedMem();
                 auto msgType = msg->getMsgType();
                 auto *worker= workers[msgType % noWorkers];
-                auto cbMap = cbFuncs[msgType];
-                for (auto it= cbMap.begin(); it != cbMap.end(); it++)
-                    worker->getQueue().push(std::make_pair(it->second, msg));
+                worker->getQueue().push(msg);
             }
         }
     }; // Dispatcher

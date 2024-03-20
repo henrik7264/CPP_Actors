@@ -34,8 +34,6 @@ namespace Messages
 
         Message_t getMsgType() const {return msgType;}
     }; // Message
-
-    typedef std::shared_ptr<Message> Message_ptr;
 } // Messages
 
 #endif //CPP_ACTORS_MESSAGE_H

@@ -31,10 +31,10 @@ namespace Actors
         enum State {DOOR_OPENED, DOOR_CLOSED};
         StateMachine_t sm = STATEMACHINE(State::DOOR_CLOSED,
                 STATE(State::DOOR_CLOSED,
-                      MESSAGE(Message_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](const Message_ptr& msg){
+                      MESSAGE(Message_t::OPEN_DOOR, NEXT_STATE(State::DOOR_OPENED), [this](Message* msg){
                           Logger::debug() << "Opening door ...";})),
                 STATE(State::DOOR_OPENED,
-                      MESSAGE(Message_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](const Message_ptr& msg){
+                      MESSAGE(Message_t::CLOSE_DOOR, NEXT_STATE(State::DOOR_CLOSED), [this](Message* msg){
                           Logger::debug() << "Closing door ...";}),
                       TIMER(1000, NEXT_STATE(State::DOOR_CLOSED), [this](){
                           Logger::debug() << "Auto closing door ...";})));

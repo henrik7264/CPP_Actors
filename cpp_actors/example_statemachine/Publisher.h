@@ -32,11 +32,11 @@ namespace Actors
     {
     public:
         Publisher(): Actor("PUBLISHER") {
-            Scheduler::repeat(1000, []() {
+            Scheduler::repeat(1, []() {
                 if (rand() > RAND_MAX/2 )
-                    Message::publish(new OpenDoorMsg());
+                    Messenger::publish(new OpenDoorMsg());
                 else
-                    Message::publish(new CloseDoorMsg());
+                    Messenger::publish(new CloseDoorMsg());
             });
         }
 

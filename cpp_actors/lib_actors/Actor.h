@@ -48,7 +48,7 @@ namespace Actors
     typedef std::shared_ptr<Timers::Timer> Timer_t;
     typedef std::shared_ptr<StateMachines::StateMachine> StateMachine_t;
 
-    class Message
+    class Messenger
     {
     private:
         bool& markedForDeletion;
@@ -59,14 +59,14 @@ namespace Actors
         std::map<SubscriptionId_t, Message_t> subscriptions;
 
     public:
-        explicit Message(bool& markedForDeletion, std::mutex& actorMutex): markedForDeletion(markedForDeletion), actorMutex(actorMutex) {};
-        virtual ~Message() = default;
+        explicit Messenger(bool& markedForDeletion, std::mutex& actorMutex): markedForDeletion(markedForDeletion), actorMutex(actorMutex) {};
+        virtual ~Messenger() = default;
 
         SubscriptionId_t subscribe(Message_t type, const DispatcherFunction_t& func) {
             std::unique_lock<std::mutex> lock(subscriptionsMutex);
             for (const auto& sub: subscriptions)
                 assert(sub.second != type);
-            auto fn = [this, func](const Message_ptr& msg){
+            auto fn = [this, func](Message* msg){
                 std::unique_lock<std::mutex> lock(actorMutex);
                 if (!markedForDeletion)
                     func(msg);};
@@ -82,22 +82,18 @@ namespace Actors
             subscriptions.erase(subId);
         }
 
-        static void publish(const Message_ptr& msg_ptr) {
-            Dispatchers::Dispatcher::getInstance().publish(msg_ptr);
-        }
-
-        static void publish(Messages::Message* msg) {
-            publish(Message_ptr(msg));
+        static void publish(Message* msg) {
+            Dispatchers::Dispatcher::getInstance().publish(msg);
         }
 
         auto stream(Message_t type) {
-            auto observable = rxcpp::observable<>::create<Message_ptr> (
-                [=](const rxcpp::subscriber<Message_ptr>& subscriber) {
-                    Message::subscribe(type, [=](const Message_ptr& msg) {subscriber.on_next(msg);});
+            auto observable = rxcpp::observable<>::create<Message*> (
+                [=](const rxcpp::subscriber<Message*>& subscriber) {
+                    subscribe(type, [=](Message* msg) {subscriber.on_next(msg);});
                 });
             return observable;
         }
-    }; // Message
+    }; // Messenger
 
 
     class Scheduler
@@ -174,7 +170,7 @@ namespace Actors
     }; // Logger
 
 
-    class Actor: public MemoryManagement::Memory, public Message, public Scheduler, public Logger
+    class Actor: public MemoryManagement::Memory, public Messenger, public Scheduler, public Logger
     {
     protected:
         bool markedForDeletion = false;
@@ -182,7 +178,7 @@ namespace Actors
         std::string actorName;
 
     public:
-        explicit Actor(const std::string& name): Message(markedForDeletion, actorMutex), Scheduler(markedForDeletion,actorMutex), Logger(name), markedForDeletion(false), actorName(name) {}
+        explicit Actor(const std::string& name): Messenger(markedForDeletion, actorMutex), Scheduler(markedForDeletion,actorMutex), Logger(name), markedForDeletion(false), actorName(name) {}
 
         ~Actor() override {
             markedForDeletion = true;
