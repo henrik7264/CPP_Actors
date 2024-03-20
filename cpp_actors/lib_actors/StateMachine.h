@@ -89,13 +89,13 @@ namespace StateMachines
         DispatcherFunction_t action;
 
     public:
-        MessageTransition(Message_t msgType, NextState nextState): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action([](const Message_ptr& msg){/* do nothing */}) {}
+        MessageTransition(Message_t msgType, NextState nextState): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action([](Message* msg) {/* do nothing */}) {}
         MessageTransition(Message_t msgType, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, NextState(UNDEFINED_STATE)), msgType(msgType), action(std::move(func)) {}
         MessageTransition(Message_t msgType, NextState nextState, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action(std::move(func)) {}
         ~MessageTransition() override = default;
 
         inline Message_t getMsgType() const {return msgType;}
-        void doAction(const Message_ptr& msg);
+        void doAction(Message* msg);
     }; // MessageTransition
 
 
@@ -219,7 +219,7 @@ namespace StateMachines
                             if (trans->getVarArcType() == VarArgType::MESSAGE_VA) {
                                 auto* msgTrans = dynamic_cast<MessageTransition*>(trans);
                                 auto msgType = msgTrans->getMsgType();
-                                subscriptions.emplace_back(Dispatchers::Dispatcher::getInstance().registerCB([msgTrans](const Message_ptr& msg) {msgTrans->doAction(msg);}, msgType), msgType);
+                                subscriptions.emplace_back(Dispatchers::Dispatcher::getInstance().registerCB([msgTrans](Message* msg) {msgTrans->doAction(msg);}, msgType), msgType);
                             }
                         }
                     }
@@ -230,7 +230,7 @@ namespace StateMachines
 
     std::mutex Transition::transition_lock;
 
-    void MessageTransition::doAction(const Message_ptr& msg) {
+    void MessageTransition::doAction(Message* msg) {
         if (!stateMachine->getMarkedForDeletion()) {
             auto currState = stateMachine->getCurrentState();
             std::unique_lock<std::mutex> lock(transition_lock);
