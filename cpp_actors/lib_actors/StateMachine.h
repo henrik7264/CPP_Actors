@@ -235,9 +235,10 @@ namespace StateMachines
             auto currState = stateMachine->getCurrentState();
             std::unique_lock<std::mutex> lock(transition_lock);
             if (currState == stateMachine->getCurrentState()) {
-                {std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
-                action(msg);}
-                if (nextState!=UNDEFINED_STATE)
+                std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
+                action(msg);
+                lock2.unlock();
+                if (nextState != UNDEFINED_STATE)
                     stateMachine->setCurrState(nextState);
             }
         }
@@ -248,9 +249,10 @@ namespace StateMachines
             auto currState = stateMachine->getCurrentState();
             std::unique_lock<std::mutex> lock(transition_lock);
             if (currState == stateMachine->getCurrentState()) {
-                {std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
-                action();}
-                if (nextState!=UNDEFINED_STATE)
+                std::unique_lock<std::mutex> lock2(stateMachine->getActorMutex());
+                action();
+                lock2.unlock();
+                if (nextState != UNDEFINED_STATE)
                     stateMachine->setCurrState(nextState);
             }
         }

@@ -50,10 +50,14 @@ namespace Dispatchers
             while (doLoop) {
                 auto msg = jobQueue.get(100);
                 if (msg) { // msg is null if the queue times out.
-                    auto cbMap = cbFuncs[msg->getMsgType()];
-                    for (auto it = cbMap.begin(); it != cbMap.end(); it++)
-                        if (doLoop) 
-                            it->second(msg);
+                    if (doLoop) {
+                        std::unique_lock<std::mutex> lock(mutex);
+                        auto cbMap = cbFuncs[msg->getMsgType()];
+                        lock.unlock();
+                        for (auto it = cbMap.begin(); it != cbMap.end(); it++)
+                            if (doLoop) 
+                                it->second(msg);
+                    }
                     delete msg;
                 }
             }
@@ -63,6 +67,8 @@ namespace Dispatchers
             doLoop = false;
             if (trd.joinable())
                 trd.join();
+            while (jobQueue.size() > 0)
+                delete jobQueue.get();
         }
 
     public:
@@ -93,11 +99,10 @@ namespace Dispatchers
         }
 
         virtual ~Dispatcher() {
-            std::unique_lock<std::mutex> lock(mutex);
+            noWorkers = 0;
             for (auto* worker: workers)
                 delete worker;
             workers.clear();
-            noWorkers = 0;
         };
 
         bool areWorkerQueuesEmpty() {
@@ -132,7 +137,7 @@ namespace Dispatchers
                 if (MemoryManagement::Memory::hasMarkedMem() && areWorkerQueuesEmpty())
                     MemoryManagement::Memory::freeMarkedMem();
                 auto msgType = msg->getMsgType();
-                auto *worker= workers[msgType % noWorkers];
+                auto worker = workers[msgType % noWorkers];
                 worker->getQueue().push(msg);
             }
         }
