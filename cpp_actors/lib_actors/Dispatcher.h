@@ -42,6 +42,7 @@ namespace Dispatchers
     {
     private:
         bool doLoop = true;
+        bool isExecutingCbs = false;
         std::thread trd;
         Queues::Queue<Message*> jobQueue{nullptr};
 
@@ -54,9 +55,11 @@ namespace Dispatchers
                         std::unique_lock<std::mutex> lock(mutex);
                         auto cbMap = cbFuncs[msg->getMsgType()];
                         lock.unlock();
+                        isExecutingCbs = true;
                         for (auto it = cbMap.begin(); it != cbMap.end(); it++)
                             if (doLoop) 
                                 it->second(msg);
+                        isExecutingCbs = false;
                     }
                     delete msg;
                 }
@@ -76,6 +79,7 @@ namespace Dispatchers
         virtual ~Worker() { stop(); }
 
         inline Queues::Queue <Message*>& getQueue() { return jobQueue; }
+        inline bool isExecuting() {return isExecutingCbs;}
     }; // Worker
 
 
@@ -105,9 +109,9 @@ namespace Dispatchers
             workers.clear();
         };
 
-        bool areWorkerQueuesEmpty() {
+        bool workersAreIdle() {
             for (auto* worker: workers)
-                if (!worker->getQueue().empty())
+                if (worker->isExecuting() || !worker->getQueue().empty())
                     return false;
             return true;
         }
@@ -134,7 +138,7 @@ namespace Dispatchers
         void publish(Message* msg) {
             std::unique_lock<std::mutex> lock(mutex);
             if (noWorkers > 0) {
-                if (MemoryManagement::Memory::hasMarkedMem() && areWorkerQueuesEmpty())
+                if (MemoryManagement::Memory::hasMarkedMem() && workersAreIdle())
                     MemoryManagement::Memory::freeMarkedMem();
                 auto msgType = msg->getMsgType();
                 auto worker = workers[msgType % noWorkers];
