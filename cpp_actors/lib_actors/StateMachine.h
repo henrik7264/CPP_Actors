@@ -24,7 +24,6 @@
 #include <list>
 #include <map>
 #include <utility>
-#include "Memory.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
@@ -82,7 +81,7 @@ namespace StateMachines
     }; // Transition
 
 
-    class MessageTransition: public MemoryManagement::Memory, public Transition
+    class MessageTransition: public Transition
     {
     private:
         Message_t msgType;
@@ -99,7 +98,7 @@ namespace StateMachines
     }; // MessageTransition
 
 
-    class TimerTransition: public MemoryManagement::Memory, public  Transition
+    class TimerTransition: public  Transition
     {
     private:
         Timeout timeout;
@@ -119,7 +118,7 @@ namespace StateMachines
     }; // TimerTransition
 
 
-    class State: public MemoryManagement::Memory, public VarArg
+    class State: public VarArg
     {
     private:
         StateId stateId;
@@ -152,7 +151,7 @@ namespace StateMachines
     }; // State
 
 
-    class StateMachine: public MemoryManagement::Memory
+    class StateMachine
     {
     private:
         bool markedForDeletion;
