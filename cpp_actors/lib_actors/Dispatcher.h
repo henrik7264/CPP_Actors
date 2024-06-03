@@ -20,7 +20,7 @@
 #include <cassert>
 #include <functional>
 #include <memory>
-#include <list>
+#include <map>
 #include <thread>
 #include <mutex>
 #include <fstream>
@@ -35,6 +35,7 @@ namespace Dispatchers
 {
     typedef std::function<void(Message*)> Function_t;
     typedef unsigned long FuncId_t;
+    static FuncId_t NextFuncId = 0;
     static std::map<FuncId_t, Function_t> cbFuncs[Message_t::NO_OF_MSG_TYPES];
     static std::mutex mutex;
 
@@ -42,7 +43,6 @@ namespace Dispatchers
     {
     private:
         bool doLoop = true;
-        bool isExecutingCbs = false;
         std::thread trd;
         Queues::Queue<Message*> jobQueue{nullptr};
 
@@ -55,11 +55,9 @@ namespace Dispatchers
                         std::unique_lock<std::mutex> lock(mutex);
                         auto cbMap = cbFuncs[msg->getMsgType()];
                         lock.unlock();
-                        isExecutingCbs = true;
                         for (auto it = cbMap.begin(); it != cbMap.end(); it++)
-                            if (doLoop) 
+                            if (doLoop && cbFuncs[msg->getMsgType()].find(it->first) != cbFuncs[msg->getMsgType()].end()) 
                                 it->second(msg);
-                        isExecutingCbs = false;
                     }
                     delete msg;
                 }
@@ -79,7 +77,6 @@ namespace Dispatchers
         virtual ~Worker() { stop(); }
 
         inline Queues::Queue <Message*>& getQueue() { return jobQueue; }
-        inline bool isExecuting() {return isExecutingCbs;}
     }; // Worker
 
 
@@ -109,13 +106,6 @@ namespace Dispatchers
             workers.clear();
         };
 
-        bool workersAreIdle() {
-            for (auto* worker: workers)
-                if (worker->isExecuting() || !worker->getQueue().empty())
-                    return false;
-            return true;
-        }
-
     public:
         static Dispatcher& getInstance() {
             static Dispatcher MyDispatcher;
@@ -125,7 +115,7 @@ namespace Dispatchers
         FuncId_t registerCB(const Function_t& func, Message_t type) {
             assert(type != Message_t::NONE && type != Message_t::NO_OF_MSG_TYPES);
             std::unique_lock<std::mutex> lock(mutex);
-            auto funcId = reinterpret_cast<FuncId_t>(&func);
+            auto funcId = NextFuncId++;
             cbFuncs[type][funcId] = func;
             return funcId;
         }
@@ -138,8 +128,6 @@ namespace Dispatchers
         void publish(Message* msg) {
             std::unique_lock<std::mutex> lock(mutex);
             if (noWorkers > 0) {
-                if (MemoryManagement::Memory::hasMarkedMem() && workersAreIdle())
-                    MemoryManagement::Memory::freeMarkedMem();
                 auto msgType = msg->getMsgType();
                 auto worker = workers[msgType % noWorkers];
                 worker->getQueue().push(msg);

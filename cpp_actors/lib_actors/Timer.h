@@ -27,10 +27,9 @@
 
 namespace Timers
 {
-    class Timer: public MemoryManagement::Memory
+    class Timer
     {
     private:
-        bool markedForDeletion;
         std::mutex& actorMutex;
         std::mutex timerMutex;
         Schedulers::JobId_t jobId;
@@ -38,35 +37,34 @@ namespace Timers
         Schedulers::Function_t func;
 
         void timeout() {
-            if (!markedForDeletion) {
-                std::unique_lock<std::mutex> lock(actorMutex);
-                func();
-            }
-        }
-
-    public:
-        Timer(std::mutex& actorMutex, std::chrono::duration<long, std::milli> msec, Schedulers::Function_t func): markedForDeletion(false), actorMutex(actorMutex), jobId(Schedulers::JobIdMax), msec(msec), func(std::move(func)) {}
-        Timer(std::mutex& actorMutex, long msec, const Schedulers::Function_t& func): Timer(actorMutex, std::chrono::duration<long, std::milli>(msec), func) {}
-        virtual ~Timer() {
             std::unique_lock<std::mutex> lock(actorMutex);
-            markedForDeletion = true;
-            stop();
+            func();
         }
 
-        void stop() {
-            std::unique_lock<std::mutex> lock(timerMutex);
+        void stopTimer() {
             if (jobId != Schedulers::JobIdMax) {
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
                 jobId = Schedulers::JobIdMax;
             }
         }
 
+    public:
+        Timer(std::mutex& actorMutex, std::chrono::duration<long, std::milli> msec, Schedulers::Function_t func): actorMutex(actorMutex), jobId(Schedulers::JobIdMax), msec(msec), func(std::move(func)) {}
+        Timer(std::mutex& actorMutex, long msec, const Schedulers::Function_t& func): Timer(actorMutex, std::chrono::duration<long, std::milli>(msec), func) {}
+        virtual ~Timer() {
+            std::unique_lock<std::mutex> lock(actorMutex);
+            stopTimer();
+        }
+
+        void stop() {
+            std::unique_lock<std::mutex> lock(timerMutex);
+            stopTimer();
+        }
+
         void start() {
             std::unique_lock<std::mutex> lock(timerMutex);
-            if (!markedForDeletion) {
-                stop();
-                jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
-            }
+            stopTimer();
+            jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
         }
     }; // Timer
 } // Timers
