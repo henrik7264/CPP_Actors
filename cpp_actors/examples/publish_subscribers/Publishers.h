@@ -43,7 +43,7 @@ namespace Actors
 
     public:
         Publisher0(): Actor("PUBLISHER0") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg0("Hello0 no. " + std::to_string(i++)));
             });
         }
@@ -58,7 +58,7 @@ namespace Actors
 
     public:
         Publisher1(): Actor("PUBLISHER1") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg1("Hello1 no. " + std::to_string(i++)));
             });
         }
@@ -73,7 +73,7 @@ namespace Actors
 
     public:
         Publisher2(): Actor("PUBLISHER2") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg2("Hello2 no. " + std::to_string(i++)));
             });
         }
@@ -88,7 +88,7 @@ namespace Actors
 
     public:
         Publisher3(): Actor("PUBLISHER3") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg3("Hello3 no. " + std::to_string(i++)));
             });
         }
@@ -103,7 +103,7 @@ namespace Actors
 
     public:
         Publisher4(): Actor("PUBLISHER4") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg4("Hello4 no. " + std::to_string(i++)));
             });
         }
@@ -118,7 +118,7 @@ namespace Actors
 
     public:
         Publisher5(): Actor("PUBLISHER5") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg5("Hello5 no. " + std::to_string(i++)));
             });
         }
@@ -133,7 +133,7 @@ namespace Actors
 
     public:
         Publisher6(): Actor("PUBLISHER0") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg6("Hello6 no. " + std::to_string(i++)));
             });
         }
@@ -148,7 +148,7 @@ namespace Actors
 
     public:
         Publisher7(): Actor("PUBLISHER7") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg7("Hello7 no. " + std::to_string(i++)));
             });
         }
@@ -163,7 +163,7 @@ namespace Actors
 
     public:
         Publisher8(): Actor("PUBLISHER8") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg8("Hello8 no. " + std::to_string(i++)));
             });
         }
@@ -178,15 +178,12 @@ namespace Actors
 
     public:
         Publisher9(): Actor("PUBLISHER9") {
-            Scheduler::repeat(1, [this]() {
+            Scheduler::repeat(1000, [this]() {
                 Messenger::publish(new PubSubMsg9("Hello9 no. " + std::to_string(i++)));
             });
         }
         ~Publisher9() override {printf("PUBLISHER9 called %d times\n", i);};
     }; // Publisher9
-
-
-
 } // Actors
 
 #endif //CPP_ACTORS_PUBLISHERS_H

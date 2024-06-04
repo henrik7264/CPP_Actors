@@ -8,6 +8,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 include_directories(lib_messages lib_actors)
 
-add_executable(example_pubsub examples/publisher_subscriber/main.cpp)
+add_executable(example_pubsub examples/publish_subscriber/main.cpp)
+add_executable(example_pubsubs examples/publish_subscribers/main.cpp)
 add_executable(example_smachine examples/statemachine/main.cpp)
-add_executable(example_pubsub10 examples/publisher_subscriber10/main.cpp)

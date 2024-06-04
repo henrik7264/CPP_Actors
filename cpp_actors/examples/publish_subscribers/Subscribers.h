@@ -216,8 +216,6 @@ namespace Actors
         }
         ~Subscriber9() override {printf("SUBSCRIBER9 called %d times\n", i);}
     }; // Subscriber9
-
-
 } // Actors
 
 #endif //CPP_ACTORS_SUBSCRIBERS_H
