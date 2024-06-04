@@ -26,6 +26,16 @@ namespace Messages
     {
         NONE, // Don't remove or rename. NONE shall always be the first element.
         PUB_SUB, // Used in example publish subscriber.
+        PUB_SUB0, // Used in example publish subscriber10.
+        PUB_SUB1, // Used in example publish subscriber10.
+        PUB_SUB2, // Used in example publish subscriber10.
+        PUB_SUB3, // Used in example publish subscriber10.
+        PUB_SUB4, // Used in example publish subscriber10.
+        PUB_SUB5, // Used in example publish subscriber10.
+        PUB_SUB6, // Used in example publish subscriber10.
+        PUB_SUB7, // Used in example publish subscriber10.
+        PUB_SUB8, // Used in example publish subscriber10.
+        PUB_SUB9, // Used in example publish subscriber10.
         OPEN_DOOR, // Used in example state machine.
         CLOSE_DOOR, // Used in example state machine.
         NO_OF_MSG_TYPES // Don't remove or rename. NO_OF_MSG_TYPES hall always be the last element.
