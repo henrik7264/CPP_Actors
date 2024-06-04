@@ -55,9 +55,11 @@ namespace Dispatchers
                         std::unique_lock<std::mutex> lock(mutex);
                         auto cbMap = cbFuncs[msg->getMsgType()];
                         lock.unlock();
-                        for (auto it = cbMap.begin(); it != cbMap.end(); it++)
-                            if (doLoop && cbFuncs[msg->getMsgType()].find(it->first) != cbFuncs[msg->getMsgType()].end()) 
+                        for (auto it = cbMap.begin(); it != cbMap.end(); it++) {
+                            auto& cbMapRef = cbFuncs[msg->getMsgType()];
+                            if (doLoop && cbMapRef.find(it->first) != cbMapRef.end()) 
                                 it->second(msg);
+                        }
                     }
                     delete msg;
                 }
