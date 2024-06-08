@@ -174,8 +174,6 @@ namespace Actors
         explicit Actor(const std::string& name): Messenger(actorMutex), Scheduler(actorMutex), Logger(name), actorName(name) {}
 
         ~Actor() override {
-            std::unique_lock<std::mutex> lock(actorMutex);
-
             std::unique_lock<std::mutex> scheduledJobsLock(scheduledJobsMutex);
             for (const auto jobId: scheduledJobs)
                 Schedulers::Scheduler::getInstance().removeJob(jobId);
@@ -185,6 +183,8 @@ namespace Actors
             for (const auto& sub: subscriptions)
                 Dispatchers::Dispatcher::getInstance().unregisterCB(sub.first, sub.second);
             subscriptions.clear();
+
+            std::unique_lock<std::mutex> lock(actorMutex);
         }
     }; // Actor
 } // Actors

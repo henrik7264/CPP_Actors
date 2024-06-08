@@ -53,13 +53,12 @@ namespace Dispatchers
                 if (msg) { // msg is null if the queue times out.
                     if (doLoop) {
                         std::unique_lock<std::mutex> lock(mutex);
-                        auto cbMap = cbFuncs[msg->getMsgType()];
+                        auto cbMap_begin = cbFuncs[msg->getMsgType()].begin();
+                        auto cbMap_end = cbFuncs[msg->getMsgType()].end();
                         lock.unlock();
-                        for (auto it = cbMap.begin(); it != cbMap.end(); it++) {
-                            auto& cbMapRef = cbFuncs[msg->getMsgType()];
-                            if (doLoop && cbMapRef.find(it->first) != cbMapRef.end()) 
+                        for (auto it = cbMap_begin; it != cbMap_end; it++)
+                            if (doLoop)
                                 it->second(msg);
-                        }
                     }
                     delete msg;
                 }
@@ -128,9 +127,9 @@ namespace Dispatchers
         }
 
         void publish(Message* msg) {
-            std::unique_lock<std::mutex> lock(mutex);
+            //std::unique_lock<std::mutex> lock(mutex);
+            auto msgType = msg->getMsgType();
             if (noWorkers > 0) {
-                auto msgType = msg->getMsgType();
                 auto worker = workers[msgType % noWorkers];
                 worker->getQueue().push(msg);
             }
