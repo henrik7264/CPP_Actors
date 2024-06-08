@@ -20,7 +20,8 @@
 #include <cassert>
 #include <functional>
 #include <memory>
-#include <map>
+#include <vector>
+#include <list>
 #include <thread>
 #include <mutex>
 #include <fstream>
@@ -36,7 +37,8 @@ namespace Dispatchers
     typedef std::function<void(Message*)> Function_t;
     typedef unsigned long FuncId_t;
     static FuncId_t NextFuncId = 0;
-    static std::map<FuncId_t, Function_t> cbFuncs[Message_t::NO_OF_MSG_TYPES];
+    static std::vector<Function_t> cbFuncs;
+    static std::list<FuncId_t> cbFuncIds[Message_t::NO_OF_MSG_TYPES];
     static std::mutex mutex;
 
     class Worker
@@ -53,12 +55,13 @@ namespace Dispatchers
                 if (msg) { // msg is null if the queue times out.
                     if (doLoop) {
                         std::unique_lock<std::mutex> lock(mutex);
-                        auto cbMap_begin = cbFuncs[msg->getMsgType()].begin();
-                        auto cbMap_end = cbFuncs[msg->getMsgType()].end();
+                        auto funcIds = cbFuncIds[msg->getMsgType()];
                         lock.unlock();
-                        for (auto it = cbMap_begin; it != cbMap_end; it++)
-                            if (doLoop)
-                                it->second(msg);
+                        for (auto it = funcIds.begin(); it != funcIds.end(); it++) {
+                            auto func = cbFuncs[*it];
+                            if (doLoop && func != nullptr)
+                                func(msg);
+                        }
                     }
                     delete msg;
                 }
@@ -117,17 +120,18 @@ namespace Dispatchers
             assert(type != Message_t::NONE && type != Message_t::NO_OF_MSG_TYPES);
             std::unique_lock<std::mutex> lock(mutex);
             auto funcId = NextFuncId++;
-            cbFuncs[type][funcId] = func;
+            cbFuncs.push_back(func);
+            cbFuncIds[type].push_back(funcId);
             return funcId;
         }
 
         void unregisterCB(const FuncId_t& funcId, Message_t type) {
             std::unique_lock<std::mutex> lock(mutex);
-            cbFuncs[type].erase(funcId);
+            cbFuncs[funcId] = nullptr;
+            cbFuncIds[type].remove(funcId);
         }
 
         void publish(Message* msg) {
-            //std::unique_lock<std::mutex> lock(mutex);
             auto msgType = msg->getMsgType();
             if (noWorkers > 0) {
                 auto worker = workers[msgType % noWorkers];
