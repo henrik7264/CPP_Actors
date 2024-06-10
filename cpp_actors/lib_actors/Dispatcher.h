@@ -24,7 +24,6 @@
 #include <list>
 #include <thread>
 #include <mutex>
-#include <fstream>
 #include <iterator>
 #include "Queue.h"
 #include "Message.h"
@@ -58,9 +57,12 @@ namespace Dispatchers
                         auto funcIds = cbFuncIds[msg->getMsgType()];
                         lock.unlock();
                         for (auto it = funcIds.begin(); it != funcIds.end(); it++) {
-                            auto func = cbFuncs[*it];
-                            if (doLoop && func != nullptr)
-                                func(msg);
+                            auto funcId = *it;
+                            if (funcId < cbFuncs.size()) {
+                                auto func = cbFuncs[funcId];
+                                if (doLoop && func != nullptr)
+                                    func(msg);
+                            }
                         }
                     }
                     delete msg;
@@ -127,8 +129,12 @@ namespace Dispatchers
 
         void unregisterCB(const FuncId_t& funcId, Message_t type) {
             std::unique_lock<std::mutex> lock(mutex);
-            cbFuncs[funcId] = nullptr;
             cbFuncIds[type].remove(funcId);
+            cbFuncs[funcId] = nullptr;
+            while ((NextFuncId > 0) && (cbFuncs[NextFuncId-1] == nullptr)) {
+                cbFuncs.pop_back();
+                NextFuncId--;
+            }
         }
 
         void publish(Message* msg) {
