@@ -28,9 +28,10 @@
 
 namespace Timers
 {
-    class Timer
+    class Timer: public MemoryManagement::Memory
     {
     private:
+        bool markedForDeletion;
         std::mutex& actorMutex;
         std::mutex timerMutex;
         Schedulers::JobId_t jobId;
@@ -39,12 +40,8 @@ namespace Timers
 
         void timeout() {
             std::unique_lock<std::mutex> lock(actorMutex);
-<<<<<<< Updated upstream
-            func();
-=======
             if (!markedForDeletion)
                 func();
->>>>>>> Stashed changes
         }
 
         void stopTimer() {
@@ -55,14 +52,11 @@ namespace Timers
         }
 
     public:
-        Timer(std::mutex& actorMutex, std::chrono::duration<long, std::milli> msec, Schedulers::Function_t func): actorMutex(actorMutex), jobId(Schedulers::JobIdMax), msec(msec), func(std::move(func)) {}
+        Timer(std::mutex& actorMutex, std::chrono::duration<long, std::milli> msec, Schedulers::Function_t func): markedForDeletion(false), actorMutex(actorMutex), jobId(Schedulers::JobIdMax), msec(msec), func(std::move(func)) {}
         Timer(std::mutex& actorMutex, long msec, const Schedulers::Function_t& func): Timer(actorMutex, std::chrono::duration<long, std::milli>(msec), func) {}
         virtual ~Timer() {
             std::unique_lock<std::mutex> lock(actorMutex);
-<<<<<<< Updated upstream
-=======
             markedForDeletion = true;
->>>>>>> Stashed changes
             stopTimer();
         }
 
@@ -73,15 +67,10 @@ namespace Timers
 
         void start() {
             std::unique_lock<std::mutex> lock(timerMutex);
-<<<<<<< Updated upstream
-            stopTimer();
-            jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
-=======
             if (!markedForDeletion) {
                 stopTimer();
                 jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
             }
->>>>>>> Stashed changes
         }
     }; // Timer
 } // Timers

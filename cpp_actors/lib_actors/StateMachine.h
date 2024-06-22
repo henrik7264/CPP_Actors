@@ -25,6 +25,7 @@
 #include <list>
 #include <map>
 #include <utility>
+#include "Memory.h"
 #include "Message.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
@@ -99,11 +100,7 @@ namespace StateMachines
     }; // MessageTransition
 
 
-<<<<<<< Updated upstream
-    class TimerTransition: public  Transition
-=======
     class TimerTransition: public Transition
->>>>>>> Stashed changes
     {
     private:
         Timeout timeout;
@@ -156,7 +153,7 @@ namespace StateMachines
     }; // State
 
 
-    class StateMachine
+    class StateMachine: public MemoryManagement::Memory
     {
     private:
         bool markedForDeletion;
