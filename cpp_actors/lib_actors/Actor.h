@@ -183,8 +183,6 @@ namespace Actors
             for (const auto& sub: subscriptions)
                 Dispatchers::Dispatcher::getInstance().unregisterCB(sub.first, sub.second);
             subscriptions.clear();
-
-            std::unique_lock<std::mutex> lock(actorMutex);
         }
     }; // Actor
 } // Actors

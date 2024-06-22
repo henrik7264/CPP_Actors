@@ -17,6 +17,7 @@
 
 #ifndef CPP_ACTORS_STATEMACHINE_H
 #define CPP_ACTORS_STATEMACHINE_H
+
 #include <cassert>
 #include <memory>
 #include <functional>
@@ -89,8 +90,8 @@ namespace StateMachines
 
     public:
         MessageTransition(Message_t msgType, NextState nextState): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action([](Message* msg) {/* do nothing */}) {}
-        MessageTransition(Message_t msgType, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, NextState(UNDEFINED_STATE)), msgType(msgType), action(std::move(func)) {}
-        MessageTransition(Message_t msgType, NextState nextState, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action(std::move(func)) {}
+        MessageTransition(Message_t msgType, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, NextState(UNDEFINED_STATE)), msgType(msgType), action(func) {}
+        MessageTransition(Message_t msgType, NextState nextState, DispatcherFunction_t func): Transition(VarArgType::MESSAGE_VA, nextState), msgType(msgType), action(func) {}
         ~MessageTransition() override = default;
 
         inline Message_t getMsgType() const {return msgType;}
@@ -98,7 +99,11 @@ namespace StateMachines
     }; // MessageTransition
 
 
+<<<<<<< Updated upstream
     class TimerTransition: public  Transition
+=======
+    class TimerTransition: public Transition
+>>>>>>> Stashed changes
     {
     private:
         Timeout timeout;
@@ -106,11 +111,11 @@ namespace StateMachines
 
     public:
         TimerTransition(const Timeout& timeout, NextState nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
-        TimerTransition(const Timeout& timeout, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(std::move(func)) {}
-        TimerTransition(const Timeout& timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(std::move(func)) {}
+        TimerTransition(const Timeout& timeout, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(func) {}
+        TimerTransition(const Timeout& timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(func) {}
         TimerTransition(long timeout, NextState nextState): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action([](){/* do nothing */}) {}
-        TimerTransition(long timeout, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(std::move(func)) {}
-        TimerTransition(long timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(std::move(func)) {}
+        TimerTransition(long timeout, SchedulerFunction_t func): Transition(VarArgType::TIMER_VA, NextState(UNDEFINED_STATE)), timeout(timeout), action(func) {}
+        TimerTransition(long timeout, NextState nextState, SchedulerFunction_t  func): Transition(VarArgType::TIMER_VA, nextState), timeout(timeout), action(func) {}
         ~TimerTransition() override = default;
 
         inline Timeout getTimeout() const {return timeout;}

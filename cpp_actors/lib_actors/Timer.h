@@ -22,6 +22,7 @@
 #include <mutex>
 #include <functional>
 #include <utility>
+#include "Memory.h"
 #include "Scheduler.h"
 
 
@@ -38,7 +39,12 @@ namespace Timers
 
         void timeout() {
             std::unique_lock<std::mutex> lock(actorMutex);
+<<<<<<< Updated upstream
             func();
+=======
+            if (!markedForDeletion)
+                func();
+>>>>>>> Stashed changes
         }
 
         void stopTimer() {
@@ -53,6 +59,10 @@ namespace Timers
         Timer(std::mutex& actorMutex, long msec, const Schedulers::Function_t& func): Timer(actorMutex, std::chrono::duration<long, std::milli>(msec), func) {}
         virtual ~Timer() {
             std::unique_lock<std::mutex> lock(actorMutex);
+<<<<<<< Updated upstream
+=======
+            markedForDeletion = true;
+>>>>>>> Stashed changes
             stopTimer();
         }
 
@@ -63,8 +73,15 @@ namespace Timers
 
         void start() {
             std::unique_lock<std::mutex> lock(timerMutex);
+<<<<<<< Updated upstream
             stopTimer();
             jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
+=======
+            if (!markedForDeletion) {
+                stopTimer();
+                jobId = Schedulers::Scheduler::getInstance().onceIn(msec, [this](){timeout();});
+            }
+>>>>>>> Stashed changes
         }
     }; // Timer
 } // Timers
